@@ -30,32 +30,40 @@ export default function Header() {
   };
 
   return (
-    <header className="border-b border-panel-border bg-terminal-dark/80 backdrop-blur-sm sticky top-0 z-50">
-      <div className="max-w-[1920px] mx-auto px-4 py-3 flex items-center justify-between">
+    <header className="border-b border-panel-border bg-terminal-dark/90 backdrop-blur-lg sticky top-0 z-50">
+      <div className="max-w-[1920px] mx-auto px-5 py-3 flex items-center justify-between">
+        {/* Left — brand */}
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-matrix shadow-[0_0_6px_#00ff41] animate-pulse" />
-            <span className="text-green-matrix font-bold text-sm tracking-wider animate-glow">
-              SIMMER://WEATHER_OPS
-            </span>
+          <div className="flex items-center gap-2.5">
+            <div className="relative">
+              <div className="w-2.5 h-2.5 rounded-full bg-green-matrix animate-pulse-ring" />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-green-matrix font-bold text-sm tracking-wide animate-glow">
+                CLAWDBOT
+              </span>
+              <span className="text-green-dim/25 text-[0.6rem]">//</span>
+              <span className="text-green-dim/40 text-[0.65rem] tracking-wider">OPS</span>
+            </div>
           </div>
-          <span className="text-green-dim/40 text-xs">|</span>
-          <span className="text-green-dim/60 text-xs">CLAWDBOT TRACKER v1.0</span>
+          <div className="hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded bg-green-matrix/5 border border-green-matrix/10">
+            <span className="text-[0.5rem] text-green-dim/40 uppercase tracking-wider">Simmer + Polymarket</span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-6 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-green-dim/40">SYS</span>
-            <span className="text-cyan-glow font-mono">{time}</span>
+        {/* Right — system info */}
+        <div className="flex items-center gap-1 text-xs">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface/50">
+            <span className="text-green-dim/30 text-[0.55rem]">SYS</span>
+            <span className="text-cyan-glow font-mono tabular-nums text-[0.7rem]">{time}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-green-dim/40">UPTIME</span>
-            <span className="text-green-matrix">{fmtUptime(uptime)}</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface/50">
+            <span className="text-green-dim/30 text-[0.55rem]">UP</span>
+            <span className="text-green-matrix/70 tabular-nums text-[0.7rem]">{fmtUptime(uptime)}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-green-dim/40">NET</span>
-            <span className="text-green-matrix">POLYMARKET</span>
-            <div className="w-1.5 h-1.5 rounded-full bg-green-matrix shadow-[0_0_4px_#00ff41]" />
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface/50">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-matrix shadow-[0_0_4px_#39ff7f]" />
+            <span className="text-green-dim/40 text-[0.55rem]">ONLINE</span>
           </div>
         </div>
       </div>

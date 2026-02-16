@@ -254,7 +254,7 @@ export default function Dashboard() {
             </div>
             <div className="mt-4 h-0.5 bg-green-dark/30 rounded-full overflow-hidden">
               <div
-                className="h-full bg-green-matrix shadow-[0_0_6px_#00ff41] transition-all duration-300"
+                className="h-full bg-green-matrix shadow-[0_0_6px_#39ff7f] transition-all duration-300"
                 style={{ width: `${(bootLines.length / 14) * 100}%` }}
               />
             </div>
@@ -269,25 +269,28 @@ export default function Dashboard() {
       <Header />
 
       {/* Tab navigation */}
-      <div className="border-b border-panel-border bg-terminal-dark/60">
-        <div className="max-w-[1920px] mx-auto px-4 flex items-center gap-1">
+      <div className="border-b border-panel-border bg-terminal-dark/80 backdrop-blur-sm">
+        <div className="max-w-[1920px] mx-auto px-5 flex items-center gap-0.5">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2.5 text-[0.65rem] font-bold tracking-widest uppercase transition-all border-b-2 ${
+              className={`relative px-4 py-3 text-[0.6rem] font-bold tracking-widest uppercase transition-all ${
                 activeTab === tab.key
-                  ? `${tab.color} border-current`
-                  : "text-green-dim/30 border-transparent hover:text-green-dim/60"
+                  ? `${tab.color}`
+                  : "text-green-dim/20 hover:text-green-dim/40"
               }`}
             >
               {tab.label}
+              {activeTab === tab.key && (
+                <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-current" />
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      <main className="flex-1 max-w-[1920px] mx-auto w-full px-4 py-6 space-y-6">
+      <main className="flex-1 max-w-[1920px] mx-auto w-full px-5 py-6 space-y-5">
         {/* OVERVIEW tab */}
         {activeTab === "overview" && (
           <>

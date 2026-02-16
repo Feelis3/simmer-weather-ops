@@ -226,9 +226,9 @@ export const STRATEGY_LABELS: Record<string, string> = {
 };
 
 export const STRATEGY_COLORS: Record<string, string> = {
-  "sdk:weather": "#00ff41",
-  "sdk:copytrading": "#00ffff",
-  "sdk:ai-divergence": "#8b5cf6",
+  "sdk:weather": "#39ff7f",
+  "sdk:copytrading": "#22d3ee",
+  "sdk:ai-divergence": "#a78bfa",
 };
 
 export const COPYTRADING_WALLETS = [

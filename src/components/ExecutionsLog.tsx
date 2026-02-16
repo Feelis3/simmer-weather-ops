@@ -8,9 +8,9 @@ interface Props {
 }
 
 const STRATEGY_STYLES: Record<string, { color: string; bg: string; border: string; glow: string; label: string; icon: string }> = {
-  weather: { color: "text-green-matrix", bg: "bg-green-matrix/8", border: "border-green-matrix/20", glow: "#00ff41", label: "WEATHER", icon: "W" },
-  copytrading: { color: "text-cyan-glow", bg: "bg-cyan-glow/8", border: "border-cyan-glow/20", glow: "#00ffff", label: "COPYTRADING", icon: "C" },
-  "ai-divergence": { color: "text-purple-fade", bg: "bg-purple-fade/8", border: "border-purple-fade/20", glow: "#8b5cf6", label: "AI DIVERGENCE", icon: "D" },
+  weather: { color: "text-green-matrix", bg: "bg-green-matrix/8", border: "border-green-matrix/20", glow: "#39ff7f", label: "WEATHER", icon: "W" },
+  copytrading: { color: "text-cyan-glow", bg: "bg-cyan-glow/8", border: "border-cyan-glow/20", glow: "#22d3ee", label: "COPYTRADING", icon: "C" },
+  "ai-divergence": { color: "text-purple-fade", bg: "bg-purple-fade/8", border: "border-purple-fade/20", glow: "#a78bfa", label: "AI DIVERGENCE", icon: "D" },
 };
 
 function timeAgo(ts: string): string {
