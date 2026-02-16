@@ -6,6 +6,7 @@ import OverviewPanel from "@/components/OverviewPanel";
 import CityGrid from "@/components/CityGrid";
 import CopytradingSection from "@/components/CopytradingSection";
 import DivergenceSection from "@/components/DivergenceSection";
+import ExecutionsLog from "@/components/ExecutionsLog";
 import PositionsTable from "@/components/PositionsTable";
 import TradesTable from "@/components/TradesTable";
 import StatusBar from "@/components/StatusBar";
@@ -15,6 +16,7 @@ import type {
   PolymarketPosition, PolymarketActivity, WeatherMarketData,
   DivergenceOpportunity,
   SimmerPosition, SimmerTrade,
+  Execution,
 } from "@/lib/types";
 import { STRATEGIES } from "@/lib/types";
 
@@ -27,13 +29,14 @@ interface DashboardState {
   lastUpdate: number;
 }
 
-type TabKey = "overview" | "weather" | "copytrading" | "divergence";
+type TabKey = "overview" | "weather" | "copytrading" | "divergence" | "executions";
 
 const TABS: { key: TabKey; label: string; color: string }[] = [
   { key: "overview", label: "OVERVIEW", color: "text-green-matrix" },
   { key: "weather", label: "WEATHER", color: "text-green-matrix" },
   { key: "copytrading", label: "COPYTRADING", color: "text-cyan-glow" },
   { key: "divergence", label: "AI DIVERGENCE", color: "text-purple-fade" },
+  { key: "executions", label: "EXECUTIONS", color: "text-amber-warm" },
 ];
 
 function ts() {
@@ -55,6 +58,7 @@ export default function Dashboard() {
   const [bootLines, setBootLines] = useState<string[]>([]);
   const [booted, setBooted] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [executions, setExecutions] = useState<Execution[]>([]);
   const fetchCount = useRef(0);
 
   const log = useCallback((level: LogEntry["level"], message: string) => {
@@ -65,16 +69,17 @@ export default function Dashboard() {
     setIsLoading(true);
     fetchCount.current++;
     const cycle = fetchCount.current;
-    log("fetch", `Sync cycle #${cycle} starting — fetching 5 endpoints...`);
+    log("fetch", `Sync cycle #${cycle} starting — fetching 6 endpoints...`);
 
     const t0 = performance.now();
 
-    const [portfolioRes, positionsRes, tradesRes, marketsRes, briefingRes] = await Promise.allSettled([
+    const [portfolioRes, positionsRes, tradesRes, marketsRes, briefingRes, executionsRes] = await Promise.allSettled([
       fetch("/api/portfolio").then((r) => r.json()),
       fetch("/api/positions").then((r) => r.json()),
       fetch("/api/trades").then((r) => r.json()),
       fetch("/api/markets").then((r) => r.json()),
       fetch("/api/briefing").then((r) => r.json()),
+      fetch("/api/executions").then((r) => r.json()),
     ]);
 
     const elapsed = Math.round(performance.now() - t0);
@@ -142,6 +147,19 @@ export default function Dashboard() {
       log("warn", `Briefing — no data or endpoint unavailable`);
     }
 
+    // Log executions
+    if (executionsRes.status === "fulfilled") {
+      const execs: Execution[] = executionsRes.value.executions ?? [];
+      setExecutions(execs);
+      const latest = execs.length > 0 ? execs[execs.length - 1] : null;
+      log("success", `Executions OK — ${execs.length} entries from VPS`);
+      if (latest) {
+        log("info", `  Latest: [${latest.strategy}] ${latest.status} @ ${new Date(latest.ts).toLocaleTimeString("en-US", { hour12: false })}`);
+      }
+    } else {
+      log("warn", `Executions — VPS endpoint unavailable`);
+    }
+
     log("fetch", `Sync cycle #${cycle} complete in ${elapsed}ms`);
 
     setState({
@@ -183,6 +201,8 @@ export default function Dashboard() {
       "Scanning whale wallets for copytrading...",
       "Initializing AI divergence scanner...",
       "Fetching briefing and opportunities...",
+      "Connecting to VPS 194.163.160.76:8899...",
+      "Loading execution logs from server...",
       "Establishing data feeds...",
       "SYSTEM READY — ALL STRATEGIES ACTIVE",
     ];
@@ -235,7 +255,7 @@ export default function Dashboard() {
             <div className="mt-4 h-0.5 bg-green-dark/30 rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-matrix shadow-[0_0_6px_#00ff41] transition-all duration-300"
-                style={{ width: `${(bootLines.length / 12) * 100}%` }}
+                style={{ width: `${(bootLines.length / 14) * 100}%` }}
               />
             </div>
           </div>
@@ -311,6 +331,11 @@ export default function Dashboard() {
             trades={divTrades}
             pnl={divPnl}
           />
+        )}
+
+        {/* EXECUTIONS tab */}
+        {activeTab === "executions" && (
+          <ExecutionsLog executions={executions} />
         )}
 
         {/* System log always visible */}

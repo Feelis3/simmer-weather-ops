@@ -236,3 +236,66 @@ export const COPYTRADING_WALLETS = [
   "0x4762c329459b5bbf87e9fc9f65749efc7086ba70",
   "0xa0f8b626bf42c179ccfb8abd67aba00f1363b80d",
 ];
+
+// ============ VPS Execution Log ============
+
+export interface Execution {
+  ts: string;
+  strategy: string;
+  status: string;
+  output: string;
+}
+
+export interface VPSPortfolio {
+  balance_usdc: number;
+  total_exposure: number;
+  positions_count: number;
+  pnl_24h: number | null;
+  pnl_total: number;
+  concentration: {
+    top_market_pct: number;
+    top_3_markets_pct: number;
+  };
+  by_source: Record<string, SourcePnl>;
+}
+
+export interface VPSPositions {
+  agent_id: string;
+  agent_name: string;
+  positions: Array<{
+    market_id: string;
+    question: string;
+    shares_yes: number;
+    shares_no: number;
+    current_price: number;
+    current_probability: number;
+    current_value: number;
+    cost_basis: number;
+    avg_cost: number;
+    pnl: number;
+    status: string;
+    resolves_at: string;
+    venue: string;
+    currency: string;
+    sources: string[];
+  }>;
+  total_value: number;
+  sim_pnl: number;
+  polymarket_pnl: number;
+}
+
+export interface VPSTrade {
+  id: string;
+  market_id: string;
+  market_question: string;
+  side: string;
+  action: string;
+  shares: number;
+  cost: number;
+  price_before: number;
+  price_after: number;
+  created_at: string;
+  venue: string;
+  source: string;
+  reasoning: string | null;
+}

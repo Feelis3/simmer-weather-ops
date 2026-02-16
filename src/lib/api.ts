@@ -2,6 +2,7 @@ import {
   SIMMER_API,
   POLYMARKET_DATA_API,
   POLYMARKET_GAMMA_API,
+  VPS_DATA_URL,
   CITY_SERIES,
   type City,
 } from "./constants";
@@ -15,6 +16,11 @@ import type {
   GammaEvent,
   WeatherMarketData,
   TempBucket,
+  Execution,
+  VPSPortfolio,
+  VPSPositions,
+  VPSTrade,
+  DivergenceOpportunity,
 } from "./types";
 
 // --- Simmer API ---
@@ -159,4 +165,57 @@ export async function getAllWeatherMarkets(): Promise<WeatherMarketData[]> {
     .filter((r): r is PromiseFulfilledResult<WeatherMarketData | null> => r.status === "fulfilled")
     .map((r) => r.value)
     .filter((d): d is WeatherMarketData => d !== null);
+}
+
+// --- VPS Server Data (real-time from bot) ---
+
+export async function getVPSExecutions(): Promise<Execution[]> {
+  const res = await fetch(`${VPS_DATA_URL}/executions.jsonl`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`VPS executions: ${res.status}`);
+  const text = await res.text();
+  const lines = text.trim().split("\n").filter(Boolean);
+  return lines.map((line) => JSON.parse(line) as Execution);
+}
+
+export async function getVPSPortfolio(): Promise<VPSPortfolio> {
+  const res = await fetch(`${VPS_DATA_URL}/portfolio.json`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`VPS portfolio: ${res.status}`);
+  return res.json();
+}
+
+export async function getVPSPositions(): Promise<VPSPositions> {
+  const res = await fetch(`${VPS_DATA_URL}/positions.json`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`VPS positions: ${res.status}`);
+  return res.json();
+}
+
+export async function getVPSTrades(): Promise<{ trades: VPSTrade[] }> {
+  const res = await fetch(`${VPS_DATA_URL}/trades.json`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`VPS trades: ${res.status}`);
+  return res.json();
+}
+
+export async function getVPSBriefing(): Promise<SimmerBriefing | null> {
+  const res = await fetch(`${VPS_DATA_URL}/briefing.json`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function getVPSDivergence(): Promise<DivergenceOpportunity[]> {
+  const res = await fetch(`${VPS_DATA_URL}/divergence.json`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }

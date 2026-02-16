@@ -13,3 +13,4 @@ export const SIMMER_API = "https://api.simmer.markets";
 export const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 export const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 export const POLYMARKET_CLOB_API = "https://clob.polymarket.com";
+export const VPS_DATA_URL = "http://194.163.160.76:8899";
