@@ -121,21 +121,24 @@ export default function DivergenceSection({ opportunities, positions, trades, pn
                 </tr>
               </thead>
               <tbody>
-                {positions.map((p, i) => (
+                {positions.map((p, i) => {
+                  const shares = p.shares ?? p.shares_yes ?? p.shares_no ?? 0;
+                  const pnl = p.pnl ?? 0;
+                  return (
                   <tr key={i}>
                     <td className="max-w-[250px] truncate text-green-dim" title={p.title}>{p.title}</td>
                     <td>
                       <span className={`px-1.5 py-0.5 rounded text-[0.6rem] font-bold ${
-                        p.side.toLowerCase() === "yes" ? "bg-green-matrix/10 text-green-matrix" : "bg-red-alert/10 text-red-alert"
+                        (p.side ?? "").toLowerCase() === "yes" ? "bg-green-matrix/10 text-green-matrix" : "bg-red-alert/10 text-red-alert"
                       }`}>{p.side}</span>
                     </td>
-                    <td className="tabular-nums">{p.shares.toFixed(2)}</td>
-                    <td className="tabular-nums text-purple-fade">${p.current_price.toFixed(4)}</td>
-                    <td className={`tabular-nums font-bold ${p.pnl >= 0 ? "text-green-matrix" : "text-red-alert"}`}>
-                      {p.pnl >= 0 ? "+" : ""}${p.pnl.toFixed(2)}
+                    <td className="tabular-nums">{shares.toFixed(2)}</td>
+                    <td className="tabular-nums text-purple-fade">${(p.current_price ?? 0).toFixed(4)}</td>
+                    <td className={`tabular-nums font-bold ${pnl >= 0 ? "text-green-matrix" : "text-red-alert"}`}>
+                      {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
                     </td>
-                  </tr>
-                ))}
+                  </tr>);
+                })}
               </tbody>
             </table>
           </div>
@@ -175,8 +178,8 @@ export default function DivergenceSection({ opportunities, positions, trades, pn
                     <td className="max-w-[200px] truncate text-green-dim" title={t.market_question || t.title}>
                       {t.market_question || t.title}
                     </td>
-                    <td className="tabular-nums">{t.shares.toFixed(2)}</td>
-                    <td className="tabular-nums text-amber-warm">${(t.cost ?? t.amount).toFixed(2)}</td>
+                    <td className="tabular-nums">{(t.shares ?? 0).toFixed(2)}</td>
+                    <td className="tabular-nums text-amber-warm">${(t.cost ?? t.amount ?? 0).toFixed(2)}</td>
                     <td className="max-w-[200px] truncate text-green-dim/40 text-[0.6rem]" title={t.reasoning}>
                       {t.reasoning || "—"}
                     </td>

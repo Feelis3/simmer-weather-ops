@@ -70,9 +70,9 @@ export default function TradesTable({ polymarket, simmer }: Props) {
                   </td>
                   <td className="max-w-[180px] truncate text-green-dim" title={t.title}>{t.title}</td>
                   <td className="text-cyan-glow">{t.outcome || "—"}</td>
-                  <td className="tabular-nums">{t.size.toFixed(2)}</td>
-                  <td className="tabular-nums">${t.price.toFixed(4)}</td>
-                  <td className="tabular-nums text-amber-warm">${t.usdcSize.toFixed(2)}</td>
+                  <td className="tabular-nums">{(t.size ?? 0).toFixed(2)}</td>
+                  <td className="tabular-nums">${(t.price ?? 0).toFixed(4)}</td>
+                  <td className="tabular-nums text-amber-warm">${(t.usdcSize ?? 0).toFixed(2)}</td>
                   <td>
                     {t.transactionHash ? (
                       <a

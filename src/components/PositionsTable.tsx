@@ -76,20 +76,26 @@ export default function PositionsTable({ polymarket, simmer }: Props) {
                   <td><span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-purple-fade/10 text-purple-fade">PM</span></td>
                 </tr>
               ))}
-              {simmer?.positions?.map((p, i) => (
-                <tr key={`sim-${i}`}>
-                  <td className="max-w-[200px] truncate text-green-dim" title={p.title}>{p.title}</td>
-                  <td><span className="px-1.5 py-0.5 rounded text-[0.6rem] font-bold bg-amber-warm/10 text-amber-warm">{p.side}</span></td>
-                  <td className="tabular-nums">{p.shares.toFixed(2)}</td>
-                  <td className="tabular-nums text-cyan-glow">${p.avg_price.toFixed(4)}</td>
-                  <td className="tabular-nums">${p.current_price.toFixed(4)}</td>
-                  <td className={`tabular-nums font-bold ${p.pnl >= 0 ? "text-green-matrix" : "text-red-alert"}`}>
-                    {p.pnl >= 0 ? "+" : ""}${p.pnl.toFixed(2)}
-                  </td>
-                  <td>—</td>
-                  <td><span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-amber-warm/10 text-amber-warm">SIM</span></td>
-                </tr>
-              ))}
+              {simmer?.positions?.map((p, i) => {
+                const shares = p.shares ?? p.shares_yes ?? p.shares_no ?? 0;
+                const avgPrice = p.avg_price ?? 0;
+                const curPrice = p.current_price ?? 0;
+                const pnl = p.pnl ?? 0;
+                return (
+                  <tr key={`sim-${i}`}>
+                    <td className="max-w-[200px] truncate text-green-dim" title={p.title}>{p.title}</td>
+                    <td><span className="px-1.5 py-0.5 rounded text-[0.6rem] font-bold bg-amber-warm/10 text-amber-warm">{p.side}</span></td>
+                    <td className="tabular-nums">{shares.toFixed(2)}</td>
+                    <td className="tabular-nums text-cyan-glow">${avgPrice.toFixed(4)}</td>
+                    <td className="tabular-nums">${curPrice.toFixed(4)}</td>
+                    <td className={`tabular-nums font-bold ${pnl >= 0 ? "text-green-matrix" : "text-red-alert"}`}>
+                      {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                    </td>
+                    <td>—</td>
+                    <td><span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-amber-warm/10 text-amber-warm">SIM</span></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
