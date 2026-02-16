@@ -7,10 +7,10 @@ interface Props {
   executions: Execution[];
 }
 
-const STRATEGY_STYLES: Record<string, { color: string; bg: string; glow: string; label: string }> = {
-  weather: { color: "text-green-matrix", bg: "bg-green-matrix/10", glow: "#00ff41", label: "WEATHER" },
-  copytrading: { color: "text-cyan-glow", bg: "bg-cyan-glow/10", glow: "#00ffff", label: "COPYTRADING" },
-  "ai-divergence": { color: "text-purple-fade", bg: "bg-purple-fade/10", glow: "#8b5cf6", label: "AI DIVERGENCE" },
+const STRATEGY_STYLES: Record<string, { color: string; bg: string; border: string; glow: string; label: string; icon: string }> = {
+  weather: { color: "text-green-matrix", bg: "bg-green-matrix/8", border: "border-green-matrix/20", glow: "#00ff41", label: "WEATHER", icon: "W" },
+  copytrading: { color: "text-cyan-glow", bg: "bg-cyan-glow/8", border: "border-cyan-glow/20", glow: "#00ffff", label: "COPYTRADING", icon: "C" },
+  "ai-divergence": { color: "text-purple-fade", bg: "bg-purple-fade/8", border: "border-purple-fade/20", glow: "#8b5cf6", label: "AI DIVERGENCE", icon: "D" },
 };
 
 function timeAgo(ts: string): string {
@@ -27,45 +27,74 @@ function formatTime(ts: string): string {
   return d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+// ─── Data parsers ──────────────────────────────────────────
+
 interface DivergenceItem {
   question: string;
   current_probability: number;
   external_price_yes: number;
   divergence: number;
-  volume_24h: number;
+  volume_24h: number | null;
   status: string;
   outcome: boolean | null;
+  url?: string;
 }
 
-/** Try to parse AI divergence JSON output into structured data */
-function parseDivergenceOutput(output: string): DivergenceItem[] | null {
+function parseDivergenceOutput(output: string): { items: DivergenceItem[]; traded: boolean } | null {
   try {
-    // The output may contain JSON followed by ---TRADE--- markers
-    const jsonMatch = output.match(/^\s*\[[\s\S]*?\]\s*(?:\n---TRADE---|$)/);
-    if (!jsonMatch) return null;
-    const cleanJson = jsonMatch[0].replace(/\n---TRADE---/, "").trim();
-    const parsed = JSON.parse(cleanJson);
+    const traded = output.includes("---TRADE---");
+    // Try to extract the JSON array — it may be truncated before ---TRADE---
+    // Find the outermost [ ... ] allowing for nested objects
+    let depth = 0;
+    let start = -1;
+    let end = -1;
+    for (let i = 0; i < output.length; i++) {
+      if (output[i] === "[" && depth === 0) { start = i; depth++; }
+      else if (output[i] === "[") depth++;
+      else if (output[i] === "]") { depth--; if (depth === 0) { end = i + 1; break; } }
+    }
+    if (start === -1 || end === -1) {
+      // Try a less strict approach: find incomplete JSON array
+      const bracketStart = output.indexOf("[");
+      if (bracketStart === -1) return null;
+      // Find the last complete object
+      const lastObjEnd = output.lastIndexOf("}");
+      if (lastObjEnd === -1) return null;
+      const jsonStr = output.substring(bracketStart, lastObjEnd + 1) + "]";
+      try {
+        const parsed = JSON.parse(jsonStr);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].question) {
+          return { items: parsed, traded };
+        }
+      } catch { /* fall through */ }
+      return null;
+    }
+    const jsonStr = output.substring(start, end);
+    const parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
     if (!parsed[0].question) return null;
-    return parsed as DivergenceItem[];
+    return { items: parsed as DivergenceItem[], traded };
   } catch {
     return null;
   }
 }
 
-/** Parse copytrading output into structured summary */
-function parseCopytradingOutput(output: string): {
+interface CopytradingData {
   walletsAnalyzed: number;
   positionsFound: number;
   conflictsSkipped: number;
+  topN: number;
+  maxPerPosition: string;
   matched: boolean;
-  summary: string;
-} | null {
+}
+
+function parseCopytradingOutput(output: string): CopytradingData | null {
   const walletsMatch = output.match(/Wallets analyzed:\s*(\d+)/);
   const posMatch = output.match(/Positions found:\s*(\d+)/);
   const conflictsMatch = output.match(/Conflicts skipped:\s*(\d+)/);
+  const topNMatch = output.match(/Top N used:\s*(\d+)/);
+  const maxMatch = output.match(/Max per position:\s*(\$[0-9.]+)/);
   const noMatch = output.includes("No target positions could be matched");
-  const scanComplete = output.includes("Scan complete");
 
   if (!walletsMatch && !posMatch) return null;
 
@@ -73,92 +102,134 @@ function parseCopytradingOutput(output: string): {
     walletsAnalyzed: walletsMatch ? parseInt(walletsMatch[1]) : 0,
     positionsFound: posMatch ? parseInt(posMatch[1]) : 0,
     conflictsSkipped: conflictsMatch ? parseInt(conflictsMatch[1]) : 0,
+    topN: topNMatch ? parseInt(topNMatch[1]) : 0,
+    maxPerPosition: maxMatch ? maxMatch[1] : "$1.00",
     matched: !noMatch,
-    summary: scanComplete ? (noMatch ? "No matches found" : "Matches found") : "In progress",
   };
 }
 
-/** Parse weather output */
-function parseWeatherOutput(output: string): string | null {
-  const sizingMatch = output.match(/Smart sizing:\s*\$([0-9.]+)\s*\(([^)]+)\)/);
+interface WeatherData {
+  sizing: string;
+  balance: string;
+  pct: string;
+  traded: boolean;
+}
+
+function parseWeatherOutput(output: string): WeatherData | null {
+  const sizingMatch = output.match(/Smart sizing:\s*\$([0-9.]+)\s*\((\d+)%\s*of\s*\$([0-9.]+)\s*balance\)/);
   if (sizingMatch) {
-    return `$${sizingMatch[1]} — ${sizingMatch[2]}`;
+    const traded = output.includes("---TRADE---") || output.includes("Executed") || output.includes("Bought") || output.includes("Order placed");
+    return {
+      sizing: sizingMatch[1],
+      pct: sizingMatch[2],
+      balance: sizingMatch[3],
+      traded,
+    };
   }
   const trimmed = output.trim();
-  if (trimmed.length === 0) return "No output";
+  if (trimmed.length === 0) return { sizing: "0", pct: "0", balance: "?", traded: false };
   return null;
 }
+
+// ─── Sub-components ────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   const isOk = status === "ok" || status === "success";
   return (
     <span
-      className={`px-1.5 py-0.5 rounded text-[0.55rem] font-bold uppercase tracking-wider ${
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.5rem] font-bold uppercase tracking-wider ${
         isOk
-          ? "bg-green-matrix/15 text-green-matrix border border-green-matrix/20"
-          : "bg-red-alert/15 text-red-alert border border-red-alert/20"
+          ? "bg-green-matrix/10 text-green-matrix"
+          : "bg-red-alert/10 text-red-alert"
       }`}
     >
+      <span className={`w-1 h-1 rounded-full ${isOk ? "bg-green-matrix" : "bg-red-alert"}`} />
       {isOk ? "OK" : status.toUpperCase()}
     </span>
   );
 }
 
-/** Render AI Divergence as a nice table */
-function DivergenceTable({ items }: { items: DivergenceItem[] }) {
-  // Sort by absolute divergence
-  const sorted = [...items].sort((a, b) => Math.abs(b.divergence) - Math.abs(a.divergence));
-  const top = sorted.slice(0, 8); // Show top 8
+function TradeBadge({ traded }: { traded: boolean }) {
+  if (!traded) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.5rem] font-bold uppercase tracking-wider bg-green-dim/5 text-green-dim/30">
+        SCAN ONLY
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.5rem] font-bold uppercase tracking-wider bg-amber-warm/15 text-amber-warm animate-pulse">
+      TRADED
+    </span>
+  );
+}
+
+function DivergenceTable({ data }: { data: { items: DivergenceItem[]; traded: boolean } }) {
+  const sorted = [...data.items].sort((a, b) => Math.abs(b.divergence) - Math.abs(a.divergence));
+  const top = sorted.slice(0, 6);
 
   return (
-    <div className="ml-4 mt-2">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[0.55rem] text-purple-fade/60 uppercase tracking-wider">
-          {items.length} opportunities scanned — top {top.length}:
-        </span>
+    <div className="mt-2 rounded-lg border border-purple-fade/10 bg-purple-fade/[0.02] overflow-hidden">
+      {/* Summary bar */}
+      <div className="px-3 py-1.5 bg-purple-fade/5 border-b border-purple-fade/10 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[0.6rem] text-purple-fade/70 font-bold uppercase tracking-wider">
+            {data.items.length} opportunities scanned
+          </span>
+          <TradeBadge traded={data.traded} />
+        </div>
+        <span className="text-[0.5rem] text-green-dim/25">top {top.length} by divergence</span>
       </div>
+
+      {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full border-collapse">
           <thead>
-            <tr>
-              <th className="text-left text-[0.5rem] text-green-dim/30 font-normal pb-1">Market</th>
-              <th className="text-right text-[0.5rem] text-green-dim/30 font-normal pb-1">Simmer</th>
-              <th className="text-right text-[0.5rem] text-green-dim/30 font-normal pb-1">PM</th>
-              <th className="text-right text-[0.5rem] text-green-dim/30 font-normal pb-1">Div%</th>
-              <th className="text-right text-[0.5rem] text-green-dim/30 font-normal pb-1">Vol 24h</th>
-              <th className="text-center text-[0.5rem] text-green-dim/30 font-normal pb-1">Result</th>
+            <tr className="border-b border-green-dim/8">
+              <th className="text-left text-[0.55rem] text-green-dim/40 font-medium px-3 py-1.5 uppercase tracking-wider">Market</th>
+              <th className="text-right text-[0.55rem] text-green-dim/40 font-medium px-2 py-1.5 uppercase tracking-wider">Simmer</th>
+              <th className="text-right text-[0.55rem] text-green-dim/40 font-medium px-2 py-1.5 uppercase tracking-wider">Poly</th>
+              <th className="text-right text-[0.55rem] text-green-dim/40 font-medium px-2 py-1.5 uppercase tracking-wider">Div</th>
+              <th className="text-right text-[0.55rem] text-green-dim/40 font-medium px-2 py-1.5 uppercase tracking-wider">Vol 24h</th>
+              <th className="text-center text-[0.55rem] text-green-dim/40 font-medium px-2 py-1.5 uppercase tracking-wider">Status</th>
             </tr>
           </thead>
           <tbody>
             {top.map((item, i) => {
               const divAbs = Math.abs(item.divergence * 100);
               const divPct = item.divergence * 100;
+              // Shorten market name
+              const shortQ = item.question
+                .replace(/^(Bitcoin|Ethereum|Solana|XRP)\s+Up or Down\s*-\s*/, "$1 ")
+                .replace(/February\s+\d+,\s*/, "");
               return (
-                <tr key={i} className={divAbs > 10 ? "bg-purple-fade/5" : ""}>
-                  <td className="text-[0.55rem] text-green-dim/70 max-w-[200px] truncate pr-2 py-0.5" title={item.question}>
-                    {item.question.replace(/^(Bitcoin|Ethereum|Solana)\s+(Up or Down)\s*-\s*/, "$1 ")}
+                <tr key={i} className={`border-b border-green-dim/5 last:border-b-0 ${divAbs > 15 ? "bg-purple-fade/5" : ""}`}>
+                  <td className="text-[0.6rem] text-green-dim/70 max-w-[180px] truncate px-3 py-1.5 font-mono" title={item.question}>
+                    {shortQ}
                   </td>
-                  <td className="text-[0.55rem] text-purple-fade tabular-nums text-right py-0.5">
+                  <td className="text-[0.6rem] text-purple-fade tabular-nums text-right px-2 py-1.5 font-bold">
                     {(item.current_probability * 100).toFixed(1)}%
                   </td>
-                  <td className="text-[0.55rem] text-cyan-glow tabular-nums text-right py-0.5">
+                  <td className="text-[0.6rem] text-cyan-glow tabular-nums text-right px-2 py-1.5">
                     {(item.external_price_yes * 100).toFixed(1)}%
                   </td>
-                  <td className={`text-[0.55rem] tabular-nums text-right font-bold py-0.5 ${
-                    divAbs > 10 ? "text-amber-warm" : divAbs > 5 ? "text-green-matrix" : "text-green-dim/50"
-                  }`}>
-                    {divPct > 0 ? "+" : ""}{divPct.toFixed(1)}%
+                  <td className="text-right px-2 py-1.5">
+                    <span className={`text-[0.6rem] tabular-nums font-bold ${
+                      divAbs > 15 ? "text-amber-warm" : divAbs > 8 ? "text-green-matrix" : "text-green-dim/40"
+                    }`}>
+                      {divPct > 0 ? "+" : ""}{divPct.toFixed(1)}%
+                    </span>
                   </td>
-                  <td className="text-[0.55rem] text-green-dim/40 tabular-nums text-right py-0.5">
-                    ${item.volume_24h?.toFixed(0) ?? "—"}
+                  <td className="text-[0.6rem] text-green-dim/35 tabular-nums text-right px-2 py-1.5">
+                    {item.volume_24h != null ? `$${item.volume_24h.toFixed(0)}` : "—"}
                   </td>
-                  <td className="text-center py-0.5">
+                  <td className="text-center px-2 py-1.5">
                     {item.outcome === true ? (
-                      <span className="text-[0.5rem] text-green-matrix">✓ YES</span>
+                      <span className="text-[0.55rem] text-green-matrix font-bold">YES</span>
                     ) : item.outcome === false ? (
-                      <span className="text-[0.5rem] text-red-alert">✗ NO</span>
+                      <span className="text-[0.55rem] text-red-alert font-bold">NO</span>
                     ) : (
-                      <span className="text-[0.5rem] text-amber-warm/50">PENDING</span>
+                      <span className="text-[0.55rem] text-amber-warm/40">OPEN</span>
                     )}
                   </td>
                 </tr>
@@ -167,53 +238,94 @@ function DivergenceTable({ items }: { items: DivergenceItem[] }) {
           </tbody>
         </table>
       </div>
-      {items.length > top.length && (
-        <p className="text-[0.5rem] text-green-dim/20 mt-1">
-          +{items.length - top.length} more opportunities below threshold
-        </p>
+      {data.items.length > top.length && (
+        <div className="px-3 py-1 bg-green-dim/[0.02] border-t border-green-dim/5">
+          <span className="text-[0.5rem] text-green-dim/20">
+            +{data.items.length - top.length} more below threshold
+          </span>
+        </div>
       )}
     </div>
   );
 }
 
-/** Render copytrading as a compact summary */
-function CopytradingSummary({ data }: { data: { walletsAnalyzed: number; positionsFound: number; conflictsSkipped: number; matched: boolean; summary: string } }) {
+function CopytradingSummary({ data }: { data: CopytradingData }) {
   return (
-    <div className="ml-4 mt-2 flex items-center gap-4 flex-wrap">
-      <div className="flex items-center gap-1.5">
-        <span className="text-[0.55rem] text-green-dim/40">Wallets:</span>
-        <span className="text-[0.6rem] text-cyan-glow font-bold tabular-nums">{data.walletsAnalyzed}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-[0.55rem] text-green-dim/40">Positions:</span>
-        <span className="text-[0.6rem] text-cyan-glow font-bold tabular-nums">{data.positionsFound}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-[0.55rem] text-green-dim/40">Conflicts:</span>
-        <span className="text-[0.6rem] text-amber-warm/70 tabular-nums">{data.conflictsSkipped}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
+    <div className="mt-2 rounded-lg border border-cyan-glow/10 bg-cyan-glow/[0.02] overflow-hidden">
+      <div className="px-3 py-2 flex items-center gap-4 flex-wrap">
+        {/* Stats */}
+        <div className="flex items-center gap-3">
+          <div className="text-center">
+            <div className="text-[0.7rem] text-cyan-glow font-bold tabular-nums leading-none">{data.walletsAnalyzed}</div>
+            <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">Wallets</div>
+          </div>
+          <div className="w-px h-5 bg-green-dim/10" />
+          <div className="text-center">
+            <div className="text-[0.7rem] text-cyan-glow font-bold tabular-nums leading-none">{data.positionsFound}</div>
+            <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">Positions</div>
+          </div>
+          <div className="w-px h-5 bg-green-dim/10" />
+          <div className="text-center">
+            <div className="text-[0.7rem] text-amber-warm/70 font-bold tabular-nums leading-none">{data.conflictsSkipped}</div>
+            <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">Conflicts</div>
+          </div>
+          <div className="w-px h-5 bg-green-dim/10" />
+          <div className="text-center">
+            <div className="text-[0.7rem] text-green-dim/50 font-bold tabular-nums leading-none">{data.topN}</div>
+            <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">Top N</div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-5 bg-green-dim/8" />
+
+        {/* Result */}
         {data.matched ? (
-          <span className="text-[0.55rem] text-green-matrix font-bold">✓ MATCHED</span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[0.55rem] font-bold bg-green-matrix/10 text-green-matrix">
+            <span className="w-1 h-1 rounded-full bg-green-matrix" />
+            MATCHED — executing trades
+          </span>
         ) : (
-          <span className="text-[0.55rem] text-green-dim/40">No matches</span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[0.55rem] bg-green-dim/5 text-green-dim/35">
+            <span className="w-1 h-1 rounded-full bg-green-dim/30" />
+            No matchable positions
+          </span>
         )}
       </div>
     </div>
   );
 }
 
-/** Render weather as compact */
-function WeatherSummary({ text }: { text: string }) {
+function WeatherSummary({ data }: { data: WeatherData }) {
   return (
-    <div className="ml-4 mt-1 flex items-center gap-2">
-      <span className="text-[0.55rem] text-green-matrix/60">💡</span>
-      <span className="text-[0.6rem] text-green-dim/60">{text}</span>
+    <div className="mt-2 rounded-lg border border-green-matrix/10 bg-green-matrix/[0.02] overflow-hidden">
+      <div className="px-3 py-2 flex items-center gap-3">
+        {/* Sizing info */}
+        <div className="flex items-center gap-2">
+          <div className="text-center">
+            <div className="text-[0.75rem] text-green-matrix font-bold tabular-nums leading-none">${data.sizing}</div>
+            <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">Bet Size</div>
+          </div>
+          <div className="w-px h-5 bg-green-dim/10" />
+          <div className="text-center">
+            <div className="text-[0.7rem] text-green-dim/50 font-bold tabular-nums leading-none">{data.pct}%</div>
+            <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">of Balance</div>
+          </div>
+          <div className="w-px h-5 bg-green-dim/10" />
+          <div className="text-center">
+            <div className="text-[0.7rem] text-green-dim/40 tabular-nums leading-none">${data.balance}</div>
+            <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">Balance</div>
+          </div>
+        </div>
+
+        <div className="w-px h-5 bg-green-dim/8" />
+
+        <TradeBadge traded={data.traded} />
+      </div>
     </div>
   );
 }
 
-/** Raw output fallback (collapsible) */
 function RawOutput({ output, color }: { output: string; color: string }) {
   const [expanded, setExpanded] = useState(false);
   const lines = output.split("\n").map(l => l.trimEnd()).filter(l => l.length > 0);
@@ -223,40 +335,43 @@ function RawOutput({ output, color }: { output: string; color: string }) {
   const hasMore = lines.length > 3;
 
   return (
-    <div className="ml-4 mt-1 border-l border-green-dim/10 pl-3">
-      <div className="space-y-0.5 font-mono text-[0.55rem] leading-relaxed">
-        {(expanded ? lines : preview).map((line, li) => (
-          <div key={li} className="flex items-start gap-2">
-            <span className="text-green-dim/15 select-none tabular-nums min-w-[14px] text-right">
-              {String(li + 1).padStart(2, "0")}
-            </span>
-            <span className={`whitespace-pre-wrap break-all ${
-              line.startsWith("✅") || line.startsWith("✓") ? "text-green-matrix/80"
-              : line.startsWith("❌") || line.startsWith("⚠") ? "text-red-alert/80"
-              : line.startsWith("🐋") || line.startsWith("📡") || line.startsWith("📊") ? `${color}/70`
-              : line.startsWith("💡") || line.startsWith("⚙") ? "text-amber-warm/60"
-              : line.startsWith("─") || line.startsWith("━") ? "text-green-dim/15"
-              : line.startsWith("📋") ? "text-cyan-glow/60"
-              : "text-green-dim/40"
-            }`}>
-              {line}
-            </span>
-          </div>
-        ))}
+    <div className="mt-2 rounded-lg border border-green-dim/10 bg-green-dim/[0.02] overflow-hidden">
+      <div className="px-3 py-2">
+        <div className="space-y-0.5 font-mono text-[0.55rem] leading-relaxed">
+          {(expanded ? lines : preview).map((line, li) => (
+            <div key={li} className="flex items-start gap-2">
+              <span className="text-green-dim/15 select-none tabular-nums min-w-[14px] text-right">
+                {String(li + 1).padStart(2, "0")}
+              </span>
+              <span className={`whitespace-pre-wrap break-all ${
+                line.startsWith("\u2705") || line.startsWith("\u2713") ? "text-green-matrix/80"
+                : line.startsWith("\u274c") || line.startsWith("\u26a0") ? "text-red-alert/80"
+                : line.startsWith("\ud83d\udc0b") || line.startsWith("\ud83d\udce1") || line.startsWith("\ud83d\udcca") ? `${color}/70`
+                : line.startsWith("\ud83d\udca1") || line.startsWith("\u2699") ? "text-amber-warm/60"
+                : line.startsWith("\u2500") || line.startsWith("\u2501") ? "text-green-dim/15"
+                : line.startsWith("\ud83d\udccb") ? "text-cyan-glow/60"
+                : "text-green-dim/40"
+              }`}>
+                {line}
+              </span>
+            </div>
+          ))}
+        </div>
+        {hasMore && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-1.5 text-[0.5rem] text-amber-warm/40 hover:text-amber-warm/70 transition-colors"
+          >
+            {expanded ? "\u25b2 Collapse" : `\u25bc Show ${lines.length - 3} more lines`}
+          </button>
+        )}
       </div>
-      {hasMore && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="mt-1 text-[0.5rem] text-amber-warm/40 hover:text-amber-warm/70 transition-colors"
-        >
-          {expanded ? "▲ Collapse" : `▼ Show ${lines.length - 3} more lines`}
-        </button>
-      )}
     </div>
   );
 }
 
-/** Group executions by cycle (same ~30s window) */
+// ─── Cycle grouping ────────────────────────────────────────
+
 interface ExecutionCycle {
   ts: string;
   entries: Execution[];
@@ -279,6 +394,8 @@ function groupByCycle(executions: Execution[]): ExecutionCycle[] {
   return cycles;
 }
 
+// ─── Main component ───────────────────────────────────────
+
 export default function ExecutionsLog({ executions }: Props) {
   const [filter, setFilter] = useState<string>("all");
 
@@ -289,7 +406,6 @@ export default function ExecutionsLog({ executions }: Props) {
 
   const cycles = useMemo(() => groupByCycle(filtered).reverse(), [filtered]);
 
-  // Stats
   const stratCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     executions.forEach((e) => {
@@ -304,48 +420,50 @@ export default function ExecutionsLog({ executions }: Props) {
       <div className="flex items-center gap-2 mb-4">
         <span className="text-green-dim/40 text-xs">&gt;</span>
         <h2 className="text-xs font-bold tracking-widest uppercase text-amber-warm">
-          Execution Log — Live Strategy Runs
+          Execution Log
         </h2>
-        <span className="ml-2 text-[0.6rem] text-green-dim/40 tabular-nums">
-          [{executions.length} total]
+        <span className="text-[0.6rem] text-green-dim/40 tabular-nums">
+          [{executions.length} runs]
         </span>
-        <div className="ml-auto flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-matrix shadow-[0_0_6px_#00ff41] animate-pulse" />
-          <span className="text-[0.55rem] text-green-matrix/60 font-bold tracking-widest">LIVE</span>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-matrix shadow-[0_0_6px_#00ff41] animate-pulse" />
+            <span className="text-[0.55rem] text-green-matrix/60 font-bold tracking-widest">LIVE</span>
+          </div>
         </div>
       </div>
 
-      {/* Filter buttons + stats */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      {/* Filter bar */}
+      <div className="flex items-center gap-1.5 mb-4 p-1 rounded-lg bg-terminal-dark/50 border border-panel-border">
         <button
           onClick={() => setFilter("all")}
-          className={`px-2.5 py-1 rounded text-[0.55rem] font-bold tracking-wider transition-all ${
+          className={`px-3 py-1.5 rounded-md text-[0.55rem] font-bold tracking-wider transition-all ${
             filter === "all"
-              ? "bg-amber-warm/15 text-amber-warm border border-amber-warm/30"
-              : "text-green-dim/30 hover:text-green-dim/60 border border-transparent"
+              ? "bg-amber-warm/15 text-amber-warm shadow-sm"
+              : "text-green-dim/30 hover:text-green-dim/60 hover:bg-green-dim/5"
           }`}
         >
-          ALL ({executions.length})
+          ALL {executions.length}
         </button>
         {Object.entries(STRATEGY_STYLES).map(([key, style]) => (
           <button
             key={key}
             onClick={() => setFilter(key)}
-            className={`px-2.5 py-1 rounded text-[0.55rem] font-bold tracking-wider transition-all ${
+            className={`px-3 py-1.5 rounded-md text-[0.55rem] font-bold tracking-wider transition-all ${
               filter === key
-                ? `${style.bg} ${style.color} border border-current/30`
-                : "text-green-dim/30 hover:text-green-dim/60 border border-transparent"
+                ? `${style.bg} ${style.color} shadow-sm`
+                : "text-green-dim/30 hover:text-green-dim/60 hover:bg-green-dim/5"
             }`}
           >
-            {style.label} ({stratCounts[key] ?? 0})
+            {style.label} {stratCounts[key] ?? 0}
           </button>
         ))}
       </div>
 
-      {/* Execution cycles */}
+      {/* Cycles list */}
       <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
         {cycles.length === 0 ? (
-          <div className="py-8 text-center">
+          <div className="py-10 text-center">
             <p className="text-green-dim/25 text-xs">&gt; No executions recorded yet</p>
             <p className="text-green-dim/15 text-[0.6rem] mt-1">
               Waiting for strategy runs from VPS...
@@ -366,68 +484,87 @@ export default function ExecutionsLog({ executions }: Props) {
             return (
               <div
                 key={`cycle-${cycle.ts}-${ci}`}
-                className={`panel p-3 ${
-                  isLatest ? "border-l-2 border-l-amber-warm/50 shadow-[0_0_8px_rgba(255,170,0,0.05)]" : ""
+                className={`rounded-lg border transition-all ${
+                  isLatest
+                    ? "border-amber-warm/20 bg-amber-warm/[0.02] shadow-[0_0_12px_rgba(255,170,0,0.03)]"
+                    : "border-panel-border bg-terminal-dark/30"
                 }`}
               >
-                {/* Cycle header */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[0.55rem] text-green-dim/30 font-mono tabular-nums">
+                {/* Cycle timestamp bar */}
+                <div className={`px-3 py-2 border-b flex items-center gap-2 ${
+                  isLatest ? "border-amber-warm/10 bg-amber-warm/[0.03]" : "border-panel-border"
+                }`}>
+                  {isLatest && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.45rem] font-bold uppercase tracking-wider bg-amber-warm/15 text-amber-warm">
+                      LATEST
+                    </span>
+                  )}
+                  <span className="text-[0.6rem] text-green-dim/50 font-mono tabular-nums">
                     {formatTime(cycle.ts)}
                   </span>
-                  <span className="text-[0.5rem] text-green-dim/20">
-                    ({timeAgo(cycle.ts)})
+                  <span className="text-[0.5rem] text-green-dim/25">
+                    {timeAgo(cycle.ts)}
                   </span>
-                  <div className="flex-1 h-px bg-green-dim/8 mx-2" />
-                  <span className="text-[0.5rem] text-green-dim/20">
-                    {cycle.entries.length} {cycle.entries.length === 1 ? "strategy" : "strategies"}
-                  </span>
-                  {isLatest && (
-                    <span className="text-[0.5rem] text-amber-warm/60 font-bold">LATEST</span>
-                  )}
+                  <div className="flex-1" />
+                  <div className="flex items-center gap-1">
+                    {cycle.entries.map((e, i) => {
+                      const s = STRATEGY_STYLES[e.strategy];
+                      return s ? (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: s.glow, opacity: 0.5 }}
+                          title={s.label}
+                        />
+                      ) : null;
+                    })}
+                  </div>
                 </div>
 
-                {/* Strategy entries in this cycle */}
-                <div className="space-y-2">
+                {/* Strategy entries */}
+                <div className="p-3 space-y-3">
                   {cycle.entries.map((exec, ei) => {
                     const style = STRATEGY_STYLES[exec.strategy] ?? {
                       color: "text-green-dim",
                       bg: "bg-green-dim/10",
+                      border: "border-green-dim/20",
                       glow: "#666",
                       label: exec.strategy.toUpperCase(),
+                      icon: "?",
                     };
 
-                    // Try structured parsing
+                    // Structured parsing
                     const divData = exec.strategy === "ai-divergence" ? parseDivergenceOutput(exec.output) : null;
                     const copyData = exec.strategy === "copytrading" ? parseCopytradingOutput(exec.output) : null;
-                    const weatherText = exec.strategy === "weather" ? parseWeatherOutput(exec.output) : null;
-                    const hasStructured = divData || copyData || weatherText;
+                    const weatherData = exec.strategy === "weather" ? parseWeatherOutput(exec.output) : null;
+                    const hasStructured = divData || copyData || weatherData;
 
                     return (
                       <div key={`${exec.ts}-${exec.strategy}-${ei}`}>
-                        {/* Strategy row */}
+                        {/* Strategy header */}
                         <div className="flex items-center gap-2">
                           <div
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: style.glow, boxShadow: `0 0 4px ${style.glow}` }}
-                          />
-                          <span className={`text-[0.6rem] font-bold ${style.color}`}>
+                            className="w-5 h-5 rounded flex items-center justify-center text-[0.5rem] font-black"
+                            style={{
+                              backgroundColor: style.glow + "15",
+                              color: style.glow,
+                              boxShadow: `0 0 6px ${style.glow}20`,
+                            }}
+                          >
+                            {style.icon}
+                          </div>
+                          <span className={`text-[0.65rem] font-bold ${style.color}`}>
                             {style.label}
                           </span>
                           <StatusBadge status={exec.status} />
-                          {exec.strategy !== cycle.entries[0].strategy && (
-                            <span className="text-[0.5rem] text-green-dim/20 tabular-nums font-mono">
-                              {formatTime(exec.ts)}
-                            </span>
-                          )}
                         </div>
 
                         {/* Structured output */}
-                        {divData && <DivergenceTable items={divData} />}
+                        {divData && <DivergenceTable data={divData} />}
                         {copyData && <CopytradingSummary data={copyData} />}
-                        {weatherText && <WeatherSummary text={weatherText} />}
+                        {weatherData && <WeatherSummary data={weatherData} />}
 
-                        {/* Raw fallback if no structured parse */}
+                        {/* Raw fallback */}
                         {!hasStructured && exec.output.trim().length > 0 && (
                           <RawOutput output={exec.output} color={style.color} />
                         )}
@@ -445,10 +582,10 @@ export default function ExecutionsLog({ executions }: Props) {
       {cycles.length > 0 && (
         <div className="mt-3 pt-3 border-t border-panel-border flex items-center justify-between">
           <span className="text-[0.5rem] text-green-dim/20">
-            Source: VPS 194.163.160.76 · Updates every ~2 min · {cycles.length} cycles
+            VPS 194.163.160.76 · ~2 min refresh · {cycles.length} cycles loaded
           </span>
           <span className="text-[0.5rem] text-green-dim/20 tabular-nums">
-            Latest: {formatTime(cycles[0].ts)}
+            Last run: {formatTime(cycles[0].ts)}
           </span>
         </div>
       )}
