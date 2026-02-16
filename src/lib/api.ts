@@ -9,6 +9,7 @@ import type {
   SimmerPortfolio,
   SimmerPositions,
   SimmerTrades,
+  SimmerBriefing,
   PolymarketPosition,
   PolymarketActivity,
   GammaEvent,
@@ -41,12 +42,21 @@ export async function getSimmerPositions(): Promise<SimmerPositions> {
   return res.json();
 }
 
-export async function getSimmerTrades(): Promise<SimmerTrades> {
-  const res = await fetch(`${SIMMER_API}/api/sdk/trades`, {
+export async function getSimmerTrades(limit = 100): Promise<SimmerTrades> {
+  const res = await fetch(`${SIMMER_API}/api/sdk/trades?limit=${limit}`, {
     headers: simmerHeaders(),
     next: { revalidate: 30 },
   });
   if (!res.ok) throw new Error(`Simmer trades: ${res.status}`);
+  return res.json();
+}
+
+export async function getSimmerBriefing(): Promise<SimmerBriefing> {
+  const res = await fetch(`${SIMMER_API}/api/sdk/briefing`, {
+    headers: simmerHeaders(),
+    next: { revalidate: 30 },
+  });
+  if (!res.ok) throw new Error(`Simmer briefing: ${res.status}`);
   return res.json();
 }
 
