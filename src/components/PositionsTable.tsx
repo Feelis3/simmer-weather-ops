@@ -7,121 +7,71 @@ interface Props {
 }
 
 export default function PositionsTable({ positions }: Props) {
-  const sorted = [...positions].sort(
-    (a, b) => Math.abs(b.pnl) - Math.abs(a.pnl)
-  );
+  const sorted = [...positions].sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
 
   return (
     <div className="panel p-4">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-3">
         <span className="text-green-dim/40 text-xs">&gt;</span>
-        <h2 className="text-xs font-bold tracking-widest uppercase text-green-matrix">
-          Active Positions
-        </h2>
-        <span className="ml-2 text-[0.6rem] text-cyan-glow tabular-nums">
-          [{positions.length}]
+        <span className="text-[0.6rem] font-bold tracking-widest uppercase text-green-dim/40">
+          Positions
         </span>
+        <span className="text-[0.55rem] text-cyan-glow/60 tabular-nums">[{positions.length}]</span>
       </div>
 
       {positions.length === 0 ? (
-        <div className="py-8 text-center">
-          <p className="text-green-dim/30 text-xs font-mono">
-            &gt; NO ACTIVE POSITIONS DETECTED
-          </p>
-          <p className="text-green-dim/20 text-[0.6rem] mt-1">
-            Waiting for bots to execute trades...
-          </p>
-          <div className="mt-4 flex justify-center gap-1">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-1.5 h-1.5 rounded-full bg-green-matrix/30 animate-pulse"
-                style={{ animationDelay: `${i * 0.3}s` }}
-              />
-            ))}
-          </div>
+        <div className="py-6 text-center">
+          <p className="text-green-dim/20 text-[0.6rem]">No open positions</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Market</th>
-                <th>Side</th>
-                <th>Shares</th>
-                <th>Entry</th>
-                <th>Current</th>
-                <th>P&L</th>
-                <th>Venue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((p, i) => {
-                const side =
-                  p.shares_yes > 0 ? "YES" : p.shares_no > 0 ? "NO" : "---";
-                const shares =
-                  p.shares_yes > 0
-                    ? p.shares_yes
-                    : p.shares_no > 0
-                    ? p.shares_no
-                    : 0;
-                const isPoly = p.venue === "polymarket";
+        <div className="space-y-2">
+          {sorted.map((p, i) => {
+            const side = p.shares_yes > 0 ? "YES" : p.shares_no > 0 ? "NO" : "---";
+            const shares = p.shares_yes > 0 ? p.shares_yes : p.shares_no;
+            const isUp = p.pnl >= 0;
 
-                return (
-                  <tr key={`${p.market_id}-${i}`}>
-                    <td
-                      className="max-w-[200px] truncate text-green-dim"
-                      title={p.question}
-                    >
-                      {p.question}
-                    </td>
-                    <td>
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[0.6rem] font-bold ${
-                          side === "YES"
-                            ? "bg-green-matrix/10 text-green-matrix"
-                            : side === "NO"
-                            ? "bg-red-alert/10 text-red-alert"
-                            : "bg-green-dim/10 text-green-dim/40"
-                        }`}
-                      >
-                        {side}
+            return (
+              <div key={`${p.market_id}-${i}`} className="flex items-center gap-3 py-2 px-2 rounded-md hover:bg-panel-hover/30 transition-colors border-b border-panel-border/30 last:border-0">
+                {/* Side badge */}
+                <span className={`shrink-0 w-8 text-center py-0.5 rounded text-[0.5rem] font-bold ${
+                  side === "YES" ? "bg-green-matrix/10 text-green-matrix" : "bg-red-alert/10 text-red-alert"
+                }`}>
+                  {side}
+                </span>
+
+                {/* Market + details */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[0.6rem] text-green-dim/60 truncate" title={p.question}>
+                    {p.question}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[0.45rem] text-green-dim/25 tabular-nums">
+                      {shares.toFixed(1)} shares @ ${p.avg_cost.toFixed(3)}
+                    </span>
+                    <span className="text-[0.45rem] text-green-dim/15">&rarr;</span>
+                    <span className="text-[0.45rem] text-cyan-glow/50 tabular-nums">
+                      ${p.current_price.toFixed(3)}
+                    </span>
+                    {p.sources.length > 0 && (
+                      <span className="text-[0.4rem] px-1 py-0.5 rounded bg-purple-fade/8 text-purple-fade/50">
+                        {p.sources[0]}
                       </span>
-                    </td>
-                    <td className="tabular-nums">{shares.toFixed(2)}</td>
-                    <td className="tabular-nums text-cyan-glow">
-                      ${p.avg_cost.toFixed(4)}
-                    </td>
-                    <td className="tabular-nums">
-                      ${p.current_price.toFixed(4)}
-                    </td>
-                    <td
-                      className={`tabular-nums font-bold ${
-                        p.pnl >= 0 ? "text-green-matrix" : "text-red-alert"
-                      }`}
-                    >
-                      {p.pnl >= 0 ? "+" : ""}
-                      {p.pnl.toFixed(2)}{" "}
-                      <span className="text-[0.5rem] font-normal text-green-dim/30">
-                        {p.currency}
-                      </span>
-                    </td>
-                    <td>
-                      {isPoly ? (
-                        <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-matrix/10 text-green-matrix font-bold">
-                          PM
-                        </span>
-                      ) : (
-                        <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-dim/10 text-green-dim/40 font-bold">
-                          SIM
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* P&L */}
+                <div className="text-right shrink-0">
+                  <div className={`text-[0.7rem] font-bold tabular-nums ${isUp ? "text-green-matrix" : "text-red-alert"}`}>
+                    {isUp ? "+" : ""}${p.pnl.toFixed(2)}
+                  </div>
+                  <div className="text-[0.4rem] text-green-dim/20 tabular-nums">
+                    ${p.current_value.toFixed(2)} val
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
