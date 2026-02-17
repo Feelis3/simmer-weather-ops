@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
-import { getPolymarketActivity } from "@/lib/api";
+import { getSimmerTrades, getPolymarketActivity } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const activity = await getPolymarketActivity(500);
+    const [simmer, polymarket] = await Promise.allSettled([
+      getSimmerTrades(),
+      getPolymarketActivity(500),
+    ]);
+
     return NextResponse.json({
-      activity,
+      simmer: simmer.status === "fulfilled" ? simmer.value : null,
+      polymarket: polymarket.status === "fulfilled" ? polymarket.value : [],
       timestamp: Date.now(),
     });
   } catch (e) {
-    return NextResponse.json({ error: String(e), activity: [] }, { status: 500 });
+    return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
