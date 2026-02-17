@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import BotCard from "@/components/BotCard";
 import PositionsTable from "@/components/PositionsTable";
 import TradesTimeline from "@/components/TradesTimeline";
@@ -56,6 +57,7 @@ export default function Dashboard() {
   const [paused, setPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
   const btcTimerRef = useRef<ReturnType<typeof setInterval>>(null);
+  const router = useRouter();
 
   // ── Fetch everything ───────────────────────────────
 
@@ -126,6 +128,11 @@ export default function Dashboard() {
   const handleRun = async (bot: BotId) => {
     await fetch(`/api/run/${bot}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     setTimeout(fetchAll, 2000);
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
   };
 
   const handlePause = async () => {
@@ -212,6 +219,13 @@ export default function Dashboard() {
                 }`}
               >
                 {paused ? "RESUME ALL" : "PAUSE ALL"}
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-2 py-1.5 rounded-md text-[0.5rem] font-bold tracking-wider transition-all text-green-dim/20 hover:text-red-alert/60 hover:bg-red-alert/5"
+                title="Logout"
+              >
+                EXIT
               </button>
             </div>
           </div>
