@@ -1,15 +1,12 @@
 "use client";
 
-import type { PolymarketPosition, SimmerPositions } from "@/lib/types";
+import type { PolymarketPosition } from "@/lib/types";
 
 interface Props {
-  polymarket: PolymarketPosition[];
-  simmer: SimmerPositions | null;
+  positions: PolymarketPosition[];
 }
 
-export default function PositionsTable({ polymarket, simmer }: Props) {
-  const hasPositions = polymarket.length > 0 || (simmer?.positions?.length ?? 0) > 0;
-
+export default function PositionsTable({ positions }: Props) {
   return (
     <div className="panel p-4">
       <div className="flex items-center gap-2 mb-4">
@@ -18,17 +15,17 @@ export default function PositionsTable({ polymarket, simmer }: Props) {
           Active Positions
         </h2>
         <span className="ml-2 text-[0.6rem] text-cyan-glow tabular-nums">
-          [{polymarket.length + (simmer?.positions?.length ?? 0)}]
+          [{positions.length}]
         </span>
       </div>
 
-      {!hasPositions ? (
+      {positions.length === 0 ? (
         <div className="py-8 text-center">
           <p className="text-green-dim/30 text-xs font-mono">
             &gt; NO ACTIVE POSITIONS DETECTED
           </p>
           <p className="text-green-dim/20 text-[0.6rem] mt-1">
-            Waiting for clawdbot to execute trades...
+            Waiting for trades to execute...
           </p>
           <div className="mt-4 flex justify-center gap-1">
             {[0, 1, 2].map((i) => (
@@ -41,9 +38,9 @@ export default function PositionsTable({ polymarket, simmer }: Props) {
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
           <table>
-            <thead>
+            <thead className="sticky top-0 bg-terminal-dark">
               <tr>
                 <th>Market</th>
                 <th>Outcome</th>
@@ -52,11 +49,10 @@ export default function PositionsTable({ polymarket, simmer }: Props) {
                 <th>Cur Price</th>
                 <th>P&L ($)</th>
                 <th>P&L (%)</th>
-                <th>Source</th>
               </tr>
             </thead>
             <tbody>
-              {polymarket.map((p, i) => (
+              {positions.map((p, i) => (
                 <tr key={`pm-${i}`}>
                   <td className="max-w-[200px] truncate text-green-dim" title={p.title}>{p.title}</td>
                   <td>
@@ -73,29 +69,8 @@ export default function PositionsTable({ polymarket, simmer }: Props) {
                   <td className={`tabular-nums ${p.percentPnl >= 0 ? "text-green-matrix" : "text-red-alert"}`}>
                     {p.percentPnl >= 0 ? "+" : ""}{p.percentPnl.toFixed(1)}%
                   </td>
-                  <td><span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-purple-fade/10 text-purple-fade">PM</span></td>
                 </tr>
               ))}
-              {simmer?.positions?.map((p, i) => {
-                const shares = p.shares ?? p.shares_yes ?? p.shares_no ?? 0;
-                const avgPrice = p.avg_price ?? 0;
-                const curPrice = p.current_price ?? 0;
-                const pnl = p.pnl ?? 0;
-                return (
-                  <tr key={`sim-${i}`}>
-                    <td className="max-w-[200px] truncate text-green-dim" title={p.title}>{p.title}</td>
-                    <td><span className="px-1.5 py-0.5 rounded text-[0.6rem] font-bold bg-amber-warm/10 text-amber-warm">{p.side}</span></td>
-                    <td className="tabular-nums">{shares.toFixed(2)}</td>
-                    <td className="tabular-nums text-cyan-glow">${avgPrice.toFixed(4)}</td>
-                    <td className="tabular-nums">${curPrice.toFixed(4)}</td>
-                    <td className={`tabular-nums font-bold ${pnl >= 0 ? "text-green-matrix" : "text-red-alert"}`}>
-                      {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
-                    </td>
-                    <td>—</td>
-                    <td><span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-amber-warm/10 text-amber-warm">SIM</span></td>
-                  </tr>
-                );
-              })}
             </tbody>
           </table>
         </div>

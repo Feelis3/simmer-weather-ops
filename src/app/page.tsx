@@ -1,41 +1,39 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Header from "@/components/Header";
 import OverviewPanel from "@/components/OverviewPanel";
 import CityGrid from "@/components/CityGrid";
-import CopytradingSection from "@/components/CopytradingSection";
-import DivergenceSection from "@/components/DivergenceSection";
 import ExecutionsLog from "@/components/ExecutionsLog";
 import PositionsTable from "@/components/PositionsTable";
 import TradesTable from "@/components/TradesTable";
 import StatusBar from "@/components/StatusBar";
 import SystemLog, { type LogEntry } from "@/components/SystemLog";
 import type {
-  SimmerPortfolio, SimmerPositions, SimmerTrades, SimmerBriefing,
   PolymarketPosition, PolymarketActivity, WeatherMarketData,
   DivergenceOpportunity,
-  SimmerPosition, SimmerTrade,
   Execution,
 } from "@/lib/types";
-import { STRATEGIES } from "@/lib/types";
 
 interface DashboardState {
-  portfolio: { simmer: SimmerPortfolio | null; polymarket_value: number } | null;
-  positions: { simmer: SimmerPositions | null; polymarket: PolymarketPosition[] } | null;
-  trades: { simmer: SimmerTrades | null; polymarket: PolymarketActivity[] } | null;
+  portfolio: {
+    portfolio_value: number;
+    total_pnl: number;
+    total_exposure: number;
+    positions_count: number;
+  } | null;
+  positions: PolymarketPosition[];
+  trades: PolymarketActivity[];
   markets: WeatherMarketData[];
-  briefing: SimmerBriefing | null;
+  divergence: DivergenceOpportunity[];
   lastUpdate: number;
 }
 
-type TabKey = "overview" | "weather" | "copytrading" | "divergence" | "executions";
+type TabKey = "overview" | "weather" | "executions";
 
 const TABS: { key: TabKey; label: string; color: string }[] = [
   { key: "overview", label: "OVERVIEW", color: "text-green-matrix" },
   { key: "weather", label: "WEATHER", color: "text-green-matrix" },
-  { key: "copytrading", label: "COPYTRADING", color: "text-cyan-glow" },
-  { key: "divergence", label: "AI DIVERGENCE", color: "text-purple-fade" },
   { key: "executions", label: "EXECUTIONS", color: "text-amber-warm" },
 ];
 
@@ -47,10 +45,10 @@ function ts() {
 export default function Dashboard() {
   const [state, setState] = useState<DashboardState>({
     portfolio: null,
-    positions: null,
-    trades: null,
+    positions: [],
+    trades: [],
     markets: [],
-    briefing: null,
+    divergence: [],
     lastUpdate: 0,
   });
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
@@ -69,7 +67,7 @@ export default function Dashboard() {
     setIsLoading(true);
     fetchCount.current++;
     const cycle = fetchCount.current;
-    log("fetch", `Sync cycle #${cycle} starting — fetching 6 endpoints...`);
+    log("fetch", `Sync cycle #${cycle} starting — fetching endpoints...`);
 
     const t0 = performance.now();
 
@@ -85,31 +83,27 @@ export default function Dashboard() {
     const elapsed = Math.round(performance.now() - t0);
 
     // Log portfolio
-    if (portfolioRes.status === "fulfilled") {
+    if (portfolioRes.status === "fulfilled" && !portfolioRes.value.error) {
       const p = portfolioRes.value;
-      const bal = p.simmer?.balance_usdc?.toFixed(2) ?? "?";
-      const pmv = p.polymarket_value?.toFixed(2) ?? "0";
-      log("success", `Portfolio OK — Simmer: $${bal} | Polymarket: $${pmv}`);
+      log("success", `Portfolio OK — Value: $${(p.portfolio_value ?? 0).toFixed(2)} | P&L: $${(p.total_pnl ?? 0).toFixed(2)}`);
     } else {
-      log("error", `Portfolio FAILED — ${portfolioRes.reason}`);
+      log("error", `Portfolio FAILED — ${portfolioRes.status === "rejected" ? portfolioRes.reason : portfolioRes.value?.error}`);
     }
 
     // Log positions
     if (positionsRes.status === "fulfilled") {
-      const pmCount = positionsRes.value.polymarket?.length ?? 0;
-      const simCount = positionsRes.value.simmer?.positions?.length ?? 0;
-      log("success", `Positions OK — Polymarket: ${pmCount} | Simmer: ${simCount}`);
+      const count = positionsRes.value.positions?.length ?? 0;
+      log("success", `Positions OK — ${count} active positions`);
     } else {
       log("error", `Positions FAILED — ${positionsRes.reason}`);
     }
 
     // Log trades
     if (tradesRes.status === "fulfilled") {
-      const pmTrades = (tradesRes.value.polymarket ?? []).filter(
+      const tradeCount = (tradesRes.value.activity ?? []).filter(
         (t: PolymarketActivity) => t.type === "TRADE"
       ).length;
-      const simTrades = tradesRes.value.simmer?.total_count ?? 0;
-      log("success", `Trades OK — Polymarket: ${pmTrades} | Simmer: ${simTrades}`);
+      log("success", `Trades OK — ${tradeCount} trades`);
     } else {
       log("error", `Trades FAILED — ${tradesRes.reason}`);
     }
@@ -118,9 +112,9 @@ export default function Dashboard() {
     if (marketsRes.status === "fulfilled") {
       const markets: WeatherMarketData[] = marketsRes.value.markets ?? [];
       const cities = markets.map((m) => m.city).join(", ");
-      const totalVol = markets.reduce((s, m) => s + m.volume, 0);
       log("success", `Markets OK — ${markets.length} cities: ${cities || "none"}`);
       if (markets.length > 0) {
+        const totalVol = markets.reduce((s, m) => s + m.volume, 0);
         log("info", `Total weather volume: $${totalVol.toLocaleString()}`);
         markets.forEach((m) => {
           const peak = m.buckets.reduce((best, b) => (b.yesPrice > best.yesPrice ? b : best), m.buckets[0]);
@@ -134,17 +128,12 @@ export default function Dashboard() {
       log("error", `Markets FAILED — ${marketsRes.reason}`);
     }
 
-    // Log briefing
-    if (briefingRes.status === "fulfilled" && briefingRes.value.briefing) {
-      const b = briefingRes.value.briefing;
-      const divCount = b.opportunities?.high_divergence?.length ?? 0;
-      const alerts = b.risk_alerts?.length ?? 0;
-      log("success", `Briefing OK — ${divCount} divergence opportunities | ${alerts} risk alerts`);
-      if (b.performance) {
-        log("info", `  Win rate: ${(b.performance.win_rate * 100).toFixed(1)}% | Avg return: ${(b.performance.avg_return * 100).toFixed(1)}%`);
-      }
+    // Log divergence
+    if (briefingRes.status === "fulfilled") {
+      const divCount = briefingRes.value.divergence?.length ?? 0;
+      log("success", `Divergence OK — ${divCount} opportunities from VPS`);
     } else {
-      log("warn", `Briefing — no data or endpoint unavailable`);
+      log("warn", `Divergence — endpoint unavailable`);
     }
 
     // Log executions
@@ -163,48 +152,30 @@ export default function Dashboard() {
     log("fetch", `Sync cycle #${cycle} complete in ${elapsed}ms`);
 
     setState({
-      portfolio: portfolioRes.status === "fulfilled" ? portfolioRes.value : null,
-      positions: positionsRes.status === "fulfilled" ? positionsRes.value : null,
-      trades: tradesRes.status === "fulfilled" ? tradesRes.value : null,
+      portfolio: portfolioRes.status === "fulfilled" && !portfolioRes.value.error ? portfolioRes.value : null,
+      positions: positionsRes.status === "fulfilled" ? positionsRes.value.positions ?? [] : [],
+      trades: tradesRes.status === "fulfilled" ? tradesRes.value.activity ?? [] : [],
       markets: marketsRes.status === "fulfilled" ? marketsRes.value.markets ?? [] : [],
-      briefing: briefingRes.status === "fulfilled" ? briefingRes.value.briefing ?? null : null,
+      divergence: briefingRes.status === "fulfilled" ? briefingRes.value.divergence ?? [] : [],
       lastUpdate: Date.now(),
     });
 
     setIsLoading(false);
   }, [log]);
 
-  // Filter positions/trades by strategy
-  const allSimmerPositions: SimmerPosition[] = state.positions?.simmer?.positions ?? [];
-  const allSimmerTrades: SimmerTrade[] = state.trades?.simmer?.trades ?? [];
-
-  const copyPositions = useMemo(() => allSimmerPositions.filter((p) => p.source === STRATEGIES.COPYTRADING), [allSimmerPositions]);
-  const copyTrades = useMemo(() => allSimmerTrades.filter((t) => t.source === STRATEGIES.COPYTRADING), [allSimmerTrades]);
-  const divPositions = useMemo(() => allSimmerPositions.filter((p) => p.source === STRATEGIES.AI_DIVERGENCE), [allSimmerPositions]);
-  const divTrades = useMemo(() => allSimmerTrades.filter((t) => t.source === STRATEGIES.AI_DIVERGENCE), [allSimmerTrades]);
-
-  const bySource = state.portfolio?.simmer?.by_source ?? {};
-  const copyPnl = (bySource[STRATEGIES.COPYTRADING] as { pnl?: number } | undefined)?.pnl ?? 0;
-  const divPnl = (bySource[STRATEGIES.AI_DIVERGENCE] as { pnl?: number } | undefined)?.pnl ?? 0;
-  const divergenceOpps: DivergenceOpportunity[] = state.briefing?.opportunities?.high_divergence ?? [];
-
   // Boot sequence
   useEffect(() => {
     const lines = [
-      "SIMMER WEATHER OPS v2.0 — BOOT SEQUENCE",
+      "CLAWDBOT OPS v2.0 — BOOT SEQUENCE",
       "Initializing kernel...",
       "Loading Polymarket CLOB interface...",
-      "Connecting to Simmer API gateway...",
       "Wallet: 0x3925...4572",
-      "Loading strategies: weather, copytrading, ai-divergence",
       "Syncing Gamma API market data...",
-      "Scanning whale wallets for copytrading...",
-      "Initializing AI divergence scanner...",
-      "Fetching briefing and opportunities...",
+      "Loading weather markets...",
       "Connecting to VPS 194.163.160.76:8899...",
       "Loading execution logs from server...",
       "Establishing data feeds...",
-      "SYSTEM READY — ALL STRATEGIES ACTIVE",
+      "SYSTEM READY — LIVE DATA ACTIVE",
     ];
 
     let i = 0;
@@ -223,7 +194,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (booted) {
-      log("info", "System boot complete — all strategies loaded");
+      log("info", "System boot complete — live data mode");
       log("info", "Auto-refresh interval: 30s");
       fetchAll();
       const interval = setInterval(fetchAll, 30000);
@@ -255,7 +226,7 @@ export default function Dashboard() {
             <div className="mt-4 h-0.5 bg-green-dark/30 rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-matrix shadow-[0_0_6px_#39ff7f] transition-all duration-300"
-                style={{ width: `${(bootLines.length / 14) * 100}%` }}
+                style={{ width: `${(bootLines.length / 10) * 100}%` }}
               />
             </div>
           </div>
@@ -295,19 +266,13 @@ export default function Dashboard() {
         {activeTab === "overview" && (
           <>
             <OverviewPanel
-              simmer={state.portfolio?.simmer ?? null}
-              polymarketValue={state.portfolio?.polymarket_value ?? 0}
-              trades={allSimmerTrades}
+              portfolio={state.portfolio}
+              positions={state.positions}
+              trades={state.trades}
             />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <PositionsTable
-                polymarket={state.positions?.polymarket ?? []}
-                simmer={state.positions?.simmer ?? null}
-              />
-              <TradesTable
-                polymarket={state.trades?.polymarket ?? []}
-                simmer={state.trades?.simmer ?? null}
-              />
+              <PositionsTable positions={state.positions} />
+              <TradesTable trades={state.trades} />
             </div>
           </>
         )}
@@ -315,25 +280,6 @@ export default function Dashboard() {
         {/* WEATHER tab */}
         {activeTab === "weather" && (
           <CityGrid markets={state.markets} />
-        )}
-
-        {/* COPYTRADING tab */}
-        {activeTab === "copytrading" && (
-          <CopytradingSection
-            positions={copyPositions}
-            trades={copyTrades}
-            pnl={copyPnl}
-          />
-        )}
-
-        {/* AI DIVERGENCE tab */}
-        {activeTab === "divergence" && (
-          <DivergenceSection
-            opportunities={divergenceOpps}
-            positions={divPositions}
-            trades={divTrades}
-            pnl={divPnl}
-          />
         )}
 
         {/* EXECUTIONS tab */}

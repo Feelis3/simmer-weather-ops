@@ -7,6 +7,8 @@ interface Props {
   executions: Execution[];
 }
 
+const PAGE_SIZE = 10;
+
 const STRATEGY_STYLES: Record<string, { color: string; bg: string; border: string; glow: string; label: string; icon: string }> = {
   weather: { color: "text-green-matrix", bg: "bg-green-matrix/8", border: "border-green-matrix/20", glow: "#39ff7f", label: "WEATHER", icon: "W" },
   copytrading: { color: "text-cyan-glow", bg: "bg-cyan-glow/8", border: "border-cyan-glow/20", glow: "#22d3ee", label: "COPYTRADING", icon: "C" },
@@ -43,8 +45,6 @@ interface DivergenceItem {
 function parseDivergenceOutput(output: string): { items: DivergenceItem[]; traded: boolean } | null {
   try {
     const traded = output.includes("---TRADE---");
-    // Try to extract the JSON array — it may be truncated before ---TRADE---
-    // Find the outermost [ ... ] allowing for nested objects
     let depth = 0;
     let start = -1;
     let end = -1;
@@ -54,10 +54,8 @@ function parseDivergenceOutput(output: string): { items: DivergenceItem[]; trade
       else if (output[i] === "]") { depth--; if (depth === 0) { end = i + 1; break; } }
     }
     if (start === -1 || end === -1) {
-      // Try a less strict approach: find incomplete JSON array
       const bracketStart = output.indexOf("[");
       if (bracketStart === -1) return null;
-      // Find the last complete object
       const lastObjEnd = output.lastIndexOf("}");
       if (lastObjEnd === -1) return null;
       const jsonStr = output.substring(bracketStart, lastObjEnd + 1) + "]";
@@ -170,7 +168,6 @@ function DivergenceTable({ data }: { data: { items: DivergenceItem[]; traded: bo
 
   return (
     <div className="mt-2 rounded-lg border border-purple-fade/10 bg-purple-fade/[0.02] overflow-hidden">
-      {/* Summary bar */}
       <div className="px-3 py-1.5 bg-purple-fade/5 border-b border-purple-fade/10 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[0.6rem] text-purple-fade/70 font-bold uppercase tracking-wider">
@@ -181,7 +178,6 @@ function DivergenceTable({ data }: { data: { items: DivergenceItem[]; traded: bo
         <span className="text-[0.5rem] text-green-dim/25">top {top.length} by divergence</span>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -198,7 +194,6 @@ function DivergenceTable({ data }: { data: { items: DivergenceItem[]; traded: bo
             {top.map((item, i) => {
               const divAbs = Math.abs(item.divergence * 100);
               const divPct = item.divergence * 100;
-              // Shorten market name
               const shortQ = item.question
                 .replace(/^(Bitcoin|Ethereum|Solana|XRP)\s+Up or Down\s*-\s*/, "$1 ")
                 .replace(/February\s+\d+,\s*/, "");
@@ -253,7 +248,6 @@ function CopytradingSummary({ data }: { data: CopytradingData }) {
   return (
     <div className="mt-2 rounded-lg border border-cyan-glow/10 bg-cyan-glow/[0.02] overflow-hidden">
       <div className="px-3 py-2 flex items-center gap-4 flex-wrap">
-        {/* Stats */}
         <div className="flex items-center gap-3">
           <div className="text-center">
             <div className="text-[0.7rem] text-cyan-glow font-bold tabular-nums leading-none">{data.walletsAnalyzed}</div>
@@ -275,11 +269,7 @@ function CopytradingSummary({ data }: { data: CopytradingData }) {
             <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">Top N</div>
           </div>
         </div>
-
-        {/* Divider */}
         <div className="w-px h-5 bg-green-dim/8" />
-
-        {/* Result */}
         {data.matched ? (
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[0.55rem] font-bold bg-green-matrix/10 text-green-matrix">
             <span className="w-1 h-1 rounded-full bg-green-matrix" />
@@ -300,7 +290,6 @@ function WeatherSummary({ data }: { data: WeatherData }) {
   return (
     <div className="mt-2 rounded-lg border border-green-matrix/10 bg-green-matrix/[0.02] overflow-hidden">
       <div className="px-3 py-2 flex items-center gap-3">
-        {/* Sizing info */}
         <div className="flex items-center gap-2">
           <div className="text-center">
             <div className="text-[0.75rem] text-green-matrix font-bold tabular-nums leading-none">${data.sizing}</div>
@@ -317,9 +306,7 @@ function WeatherSummary({ data }: { data: WeatherData }) {
             <div className="text-[0.45rem] text-green-dim/30 uppercase tracking-wider mt-0.5">Balance</div>
           </div>
         </div>
-
         <div className="w-px h-5 bg-green-dim/8" />
-
         <TradeBadge traded={data.traded} />
       </div>
     </div>
@@ -398,6 +385,7 @@ function groupByCycle(executions: Execution[]): ExecutionCycle[] {
 
 export default function ExecutionsLog({ executions }: Props) {
   const [filter, setFilter] = useState<string>("all");
+  const [page, setPage] = useState(0);
 
   const filtered = useMemo(() => {
     if (filter === "all") return executions;
@@ -406,6 +394,11 @@ export default function ExecutionsLog({ executions }: Props) {
 
   const cycles = useMemo(() => groupByCycle(filtered).reverse(), [filtered]);
 
+  const totalPages = Math.max(1, Math.ceil(cycles.length / PAGE_SIZE));
+  // Clamp page if filter changes
+  const currentPage = Math.min(page, totalPages - 1);
+  const pagedCycles = cycles.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
   const stratCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     executions.forEach((e) => {
@@ -413,6 +406,12 @@ export default function ExecutionsLog({ executions }: Props) {
     });
     return counts;
   }, [executions]);
+
+  // Reset page when filter changes
+  const handleFilter = (f: string) => {
+    setFilter(f);
+    setPage(0);
+  };
 
   return (
     <div className="panel p-4">
@@ -423,7 +422,7 @@ export default function ExecutionsLog({ executions }: Props) {
           Execution Log
         </h2>
         <span className="text-[0.6rem] text-green-dim/40 tabular-nums">
-          [{executions.length} runs]
+          [{executions.length} runs · {cycles.length} cycles]
         </span>
         <div className="ml-auto flex items-center gap-2">
           <div className="flex items-center gap-1.5">
@@ -436,7 +435,7 @@ export default function ExecutionsLog({ executions }: Props) {
       {/* Filter bar */}
       <div className="flex items-center gap-1.5 mb-4 p-1 rounded-lg bg-terminal-dark/50 border border-panel-border">
         <button
-          onClick={() => setFilter("all")}
+          onClick={() => handleFilter("all")}
           className={`px-3 py-1.5 rounded-md text-[0.55rem] font-bold tracking-wider transition-all ${
             filter === "all"
               ? "bg-amber-warm/15 text-amber-warm shadow-sm"
@@ -448,7 +447,7 @@ export default function ExecutionsLog({ executions }: Props) {
         {Object.entries(STRATEGY_STYLES).map(([key, style]) => (
           <button
             key={key}
-            onClick={() => setFilter(key)}
+            onClick={() => handleFilter(key)}
             className={`px-3 py-1.5 rounded-md text-[0.55rem] font-bold tracking-wider transition-all ${
               filter === key
                 ? `${style.bg} ${style.color} shadow-sm`
@@ -460,9 +459,9 @@ export default function ExecutionsLog({ executions }: Props) {
         ))}
       </div>
 
-      {/* Cycles list */}
-      <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
-        {cycles.length === 0 ? (
+      {/* Cycles list — paginated */}
+      <div className="space-y-3">
+        {pagedCycles.length === 0 ? (
           <div className="py-10 text-center">
             <p className="text-green-dim/25 text-xs">&gt; No executions recorded yet</p>
             <p className="text-green-dim/15 text-[0.6rem] mt-1">
@@ -479,8 +478,8 @@ export default function ExecutionsLog({ executions }: Props) {
             </div>
           </div>
         ) : (
-          cycles.map((cycle, ci) => {
-            const isLatest = ci === 0;
+          pagedCycles.map((cycle, ci) => {
+            const isLatest = currentPage === 0 && ci === 0;
             return (
               <div
                 key={`cycle-${cycle.ts}-${ci}`}
@@ -533,7 +532,6 @@ export default function ExecutionsLog({ executions }: Props) {
                       icon: "?",
                     };
 
-                    // Structured parsing
                     const divData = exec.strategy === "ai-divergence" ? parseDivergenceOutput(exec.output) : null;
                     const copyData = exec.strategy === "copytrading" ? parseCopytradingOutput(exec.output) : null;
                     const weatherData = exec.strategy === "weather" ? parseWeatherOutput(exec.output) : null;
@@ -541,7 +539,6 @@ export default function ExecutionsLog({ executions }: Props) {
 
                     return (
                       <div key={`${exec.ts}-${exec.strategy}-${ei}`}>
-                        {/* Strategy header */}
                         <div className="flex items-center gap-2">
                           <div
                             className="w-5 h-5 rounded flex items-center justify-center text-[0.5rem] font-black"
@@ -559,12 +556,10 @@ export default function ExecutionsLog({ executions }: Props) {
                           <StatusBadge status={exec.status} />
                         </div>
 
-                        {/* Structured output */}
                         {divData && <DivergenceTable data={divData} />}
                         {copyData && <CopytradingSummary data={copyData} />}
                         {weatherData && <WeatherSummary data={weatherData} />}
 
-                        {/* Raw fallback */}
                         {!hasStructured && exec.output.trim().length > 0 && (
                           <RawOutput output={exec.output} color={style.color} />
                         )}
@@ -578,11 +573,91 @@ export default function ExecutionsLog({ executions }: Props) {
         )}
       </div>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage(0)}
+            disabled={currentPage === 0}
+            className={`px-2 py-1 rounded text-[0.55rem] font-bold tracking-wider transition-all ${
+              currentPage === 0
+                ? "text-green-dim/15 cursor-not-allowed"
+                : "text-green-dim/50 hover:text-green-matrix hover:bg-green-matrix/5"
+            }`}
+          >
+            &laquo;
+          </button>
+          <button
+            onClick={() => setPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0}
+            className={`px-2 py-1 rounded text-[0.55rem] font-bold tracking-wider transition-all ${
+              currentPage === 0
+                ? "text-green-dim/15 cursor-not-allowed"
+                : "text-green-dim/50 hover:text-green-matrix hover:bg-green-matrix/5"
+            }`}
+          >
+            &lsaquo; PREV
+          </button>
+
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              // Show pages around current
+              let pageNum: number;
+              if (totalPages <= 7) {
+                pageNum = i;
+              } else if (currentPage < 3) {
+                pageNum = i;
+              } else if (currentPage > totalPages - 4) {
+                pageNum = totalPages - 7 + i;
+              } else {
+                pageNum = currentPage - 3 + i;
+              }
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setPage(pageNum)}
+                  className={`w-7 h-7 rounded text-[0.55rem] font-bold tabular-nums transition-all ${
+                    pageNum === currentPage
+                      ? "bg-amber-warm/15 text-amber-warm shadow-sm"
+                      : "text-green-dim/30 hover:text-green-dim/60 hover:bg-green-dim/5"
+                  }`}
+                >
+                  {pageNum + 1}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => setPage(Math.min(totalPages - 1, currentPage + 1))}
+            disabled={currentPage >= totalPages - 1}
+            className={`px-2 py-1 rounded text-[0.55rem] font-bold tracking-wider transition-all ${
+              currentPage >= totalPages - 1
+                ? "text-green-dim/15 cursor-not-allowed"
+                : "text-green-dim/50 hover:text-green-matrix hover:bg-green-matrix/5"
+            }`}
+          >
+            NEXT &rsaquo;
+          </button>
+          <button
+            onClick={() => setPage(totalPages - 1)}
+            disabled={currentPage >= totalPages - 1}
+            className={`px-2 py-1 rounded text-[0.55rem] font-bold tracking-wider transition-all ${
+              currentPage >= totalPages - 1
+                ? "text-green-dim/15 cursor-not-allowed"
+                : "text-green-dim/50 hover:text-green-matrix hover:bg-green-matrix/5"
+            }`}
+          >
+            &raquo;
+          </button>
+        </div>
+      )}
+
       {/* Footer */}
       {cycles.length > 0 && (
         <div className="mt-3 pt-3 border-t border-panel-border flex items-center justify-between">
           <span className="text-[0.5rem] text-green-dim/20">
-            VPS 194.163.160.76 · ~2 min refresh · {cycles.length} cycles loaded
+            VPS 194.163.160.76 · ~2 min refresh · {cycles.length} cycles loaded · page {currentPage + 1}/{totalPages}
           </span>
           <span className="text-[0.5rem] text-green-dim/20 tabular-nums">
             Last run: {formatTime(cycles[0].ts)}

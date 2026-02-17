@@ -1,10 +1,9 @@
 "use client";
 
-import type { PolymarketActivity, SimmerTrades } from "@/lib/types";
+import type { PolymarketActivity } from "@/lib/types";
 
 interface Props {
-  polymarket: PolymarketActivity[];
-  simmer: SimmerTrades | null;
+  trades: PolymarketActivity[];
 }
 
 function timeAgo(ts: number): string {
@@ -15,9 +14,8 @@ function timeAgo(ts: number): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-export default function TradesTable({ polymarket, simmer }: Props) {
-  const trades = polymarket.filter((t) => t.type === "TRADE");
-  const hasActivity = trades.length > 0 || (simmer?.total_count ?? 0) > 0;
+export default function TradesTable({ trades }: Props) {
+  const onlyTrades = trades.filter((t) => t.type === "TRADE");
 
   return (
     <div className="panel p-4">
@@ -27,18 +25,18 @@ export default function TradesTable({ polymarket, simmer }: Props) {
           Trade History
         </h2>
         <span className="ml-2 text-[0.6rem] text-cyan-glow tabular-nums">
-          [{trades.length + (simmer?.total_count ?? 0)} EXECUTIONS]
+          [{onlyTrades.length} EXECUTIONS]
         </span>
       </div>
 
-      {!hasActivity ? (
+      {onlyTrades.length === 0 ? (
         <div className="py-8 text-center">
           <div className="inline-block text-green-dim/20 text-xs font-mono">
             <p>&gt; TRADE LOG EMPTY</p>
-            <p className="mt-1">&gt; MONITORING FOR CLAWDBOT ACTIVITY...</p>
+            <p className="mt-1">&gt; MONITORING FOR ACTIVITY...</p>
             <div className="mt-3 h-px bg-gradient-to-r from-transparent via-green-matrix/20 to-transparent" />
             <p className="mt-3 text-[0.6rem] text-green-dim/15">
-              Trades will appear here once the bot starts executing on Polymarket weather markets
+              Trades will appear here once executed on Polymarket
             </p>
           </div>
         </div>
@@ -59,7 +57,7 @@ export default function TradesTable({ polymarket, simmer }: Props) {
               </tr>
             </thead>
             <tbody>
-              {trades.map((t, i) => (
+              {onlyTrades.map((t, i) => (
                 <tr key={`pm-${i}`}>
                   <td className="tabular-nums text-green-dim/60 whitespace-nowrap">{timeAgo(t.timestamp)}</td>
                   <td><span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-cyan-glow/10 text-cyan-glow">{t.type}</span></td>
