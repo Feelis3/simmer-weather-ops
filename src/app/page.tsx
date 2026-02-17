@@ -139,9 +139,10 @@ export default function Dashboard() {
     // Log executions
     if (executionsRes.status === "fulfilled") {
       const execs: Execution[] = executionsRes.value.executions ?? [];
+      const totalExecs = executionsRes.value.total ?? execs.length;
       setExecutions(execs);
       const latest = execs.length > 0 ? execs[execs.length - 1] : null;
-      log("success", `Executions OK — ${execs.length} entries from VPS`);
+      log("success", `Executions OK — ${execs.length} of ${totalExecs} entries from VPS`);
       if (latest) {
         log("info", `  Latest: [${latest.strategy}] ${latest.status} @ ${new Date(latest.ts).toLocaleTimeString("en-US", { hour12: false })}`);
       }
