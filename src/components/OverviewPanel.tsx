@@ -8,13 +8,15 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { SimmerPortfolio, SimmerTrade, SourcePnl } from "@/lib/types";
+import type { SimmerPortfolio, SimmerTrade, SourcePnl, PolymarketPosition, PolymarketActivity } from "@/lib/types";
 import { STRATEGY_LABELS, STRATEGY_COLORS, STRATEGIES } from "@/lib/types";
 
 interface Props {
   simmer: SimmerPortfolio | null;
   polymarketValue: number;
   trades: SimmerTrade[];
+  pmPositions: PolymarketPosition[];
+  pmTrades: PolymarketActivity[];
 }
 
 function StatCard({ label, value, sub, color = "text-green-matrix", accent }: {
@@ -50,30 +52,50 @@ function CustomTooltip({ active, payload }: {
   );
 }
 
-export default function OverviewPanel({ simmer, polymarketValue, trades }: Props) {
+export default function OverviewPanel({ simmer, polymarketValue, trades, pmPositions, pmTrades }: Props) {
   const balance = simmer?.balance_usdc ?? 0;
   const exposure = simmer?.total_exposure ?? 0;
-  const pnlTotal = simmer?.pnl_total ?? 0;
-  const pnl24 = simmer?.pnl_24h;
   const posCount = simmer?.positions_count ?? 0;
   const totalTrades = trades.length;
+
+  // Real P&L from Polymarket positions (sum of cashPnl + realizedPnl)
+  const realPnlTotal = pmPositions.reduce((sum, p) => sum + (p.cashPnl ?? 0), 0);
+  const pnlTotal = realPnlTotal;
+
+  // 24h P&L: calculate from trades in the last 24h
+  const now24 = Date.now() / 1000;
+  const trades24h = pmTrades.filter((t) => t.type === "TRADE" && (now24 - t.timestamp) < 86400);
+  const pnl24 = trades24h.length > 0
+    ? trades24h.reduce((sum, t) => {
+        // BUY = spent USDC, SELL = received USDC
+        return sum + (t.side === "SELL" ? t.usdcSize : -t.usdcSize);
+      }, 0)
+    : null;
 
   const bySource = simmer?.by_source ?? {};
   const strategyKeys = Object.values(STRATEGIES);
 
-  const sortedTrades = [...trades].sort(
-    (a, b) => new Date(a.created_at || a.timestamp).getTime() - new Date(b.created_at || b.timestamp).getTime()
-  );
+  // Build chart from real Polymarket trades (cumulative P&L over time)
+  const realTrades = pmTrades
+    .filter((t) => t.type === "TRADE")
+    .sort((a, b) => a.timestamp - b.timestamp);
+
   let cumPnl = 0;
-  const chartData = sortedTrades.map((t) => {
-    const profit = (t.price - (t.cost ?? t.amount) / Math.max(t.shares, 0.01));
-    cumPnl += profit * t.shares;
-    const dt = new Date(t.created_at || t.timestamp);
+  const chartData = realTrades.map((t) => {
+    // Each trade: BUY costs USDC, SELL earns USDC
+    cumPnl += t.side === "SELL" ? t.usdcSize : -t.usdcSize;
+    const dt = new Date(t.timestamp * 1000);
     return {
       label: `${dt.getMonth() + 1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, "0")}`,
       pnl: cumPnl,
     };
   });
+
+  // Add current unrealized P&L as the last point
+  if (pmPositions.length > 0) {
+    const unrealized = pmPositions.reduce((s, p) => s + (p.currentValue ?? 0), 0);
+    chartData.push({ label: "now", pnl: cumPnl + unrealized });
+  }
 
   if (chartData.length === 0) {
     chartData.push({ label: "now", pnl: pnlTotal });

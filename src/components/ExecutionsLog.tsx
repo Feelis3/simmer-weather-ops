@@ -396,8 +396,11 @@ function groupByCycle(executions: Execution[]): ExecutionCycle[] {
 
 // ─── Main component ───────────────────────────────────────
 
+const CYCLES_PER_PAGE = 10;
+
 export default function ExecutionsLog({ executions }: Props) {
   const [filter, setFilter] = useState<string>("all");
+  const [page, setPage] = useState(0);
 
   const filtered = useMemo(() => {
     if (filter === "all") return executions;
@@ -413,6 +416,10 @@ export default function ExecutionsLog({ executions }: Props) {
     });
     return counts;
   }, [executions]);
+
+  const totalPages = Math.max(1, Math.ceil(cycles.length / CYCLES_PER_PAGE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageCycles = cycles.slice(safePage * CYCLES_PER_PAGE, (safePage + 1) * CYCLES_PER_PAGE);
 
   return (
     <div className="panel p-4">
@@ -479,8 +486,8 @@ export default function ExecutionsLog({ executions }: Props) {
             </div>
           </div>
         ) : (
-          cycles.map((cycle, ci) => {
-            const isLatest = ci === 0;
+          pageCycles.map((cycle, ci) => {
+            const isLatest = ci === 0 && safePage === 0;
             return (
               <div
                 key={`cycle-${cycle.ts}-${ci}`}
@@ -577,6 +584,29 @@ export default function ExecutionsLog({ executions }: Props) {
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage(Math.max(0, safePage - 1))}
+            disabled={safePage === 0}
+            className="px-2.5 py-1 rounded text-[0.55rem] font-bold tracking-wider transition-all disabled:opacity-20 disabled:cursor-not-allowed text-green-dim/50 hover:text-green-matrix hover:bg-green-matrix/10"
+          >
+            ◀ PREV
+          </button>
+          <span className="text-[0.55rem] text-green-dim/40 tabular-nums">
+            {safePage + 1} / {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
+            disabled={safePage >= totalPages - 1}
+            className="px-2.5 py-1 rounded text-[0.55rem] font-bold tracking-wider transition-all disabled:opacity-20 disabled:cursor-not-allowed text-green-dim/50 hover:text-green-matrix hover:bg-green-matrix/10"
+          >
+            NEXT ▶
+          </button>
+        </div>
+      )}
 
       {/* Footer */}
       {cycles.length > 0 && (

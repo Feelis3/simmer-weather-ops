@@ -298,6 +298,8 @@ export default function Dashboard() {
               simmer={state.portfolio?.simmer ?? null}
               polymarketValue={state.portfolio?.polymarket_value ?? 0}
               trades={allSimmerTrades}
+              pmPositions={state.positions?.polymarket ?? []}
+              pmTrades={state.trades?.polymarket ?? []}
             />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <PositionsTable
