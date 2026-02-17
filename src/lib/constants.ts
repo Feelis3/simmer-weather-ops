@@ -1,16 +1,12 @@
-export const CITIES = ["NYC", "Chicago", "Seattle", "Atlanta", "Dallas"] as const;
-export type City = (typeof CITIES)[number];
+export const VPS_API = "http://194.163.160.76:8420";
 
-export const CITY_SERIES: Record<City, { seriesId: number; station: string; slugCity: string }> = {
-  NYC: { seriesId: 10726, station: "KLGA (LaGuardia)", slugCity: "nyc" },
-  Chicago: { seriesId: 10726, station: "KORD (O'Hare)", slugCity: "chicago" },
-  Seattle: { seriesId: 10734, station: "KSEA (SeaTac)", slugCity: "seattle" },
-  Atlanta: { seriesId: 10739, station: "KATL (Hartsfield)", slugCity: "atlanta" },
-  Dallas: { seriesId: 10727, station: "Love Field", slugCity: "dallas" },
+export type BotId = "weather" | "btc" | "eia" | "fred";
+
+export const BOTS: Record<BotId, { label: string; emoji: string; color: string; desc: string }> = {
+  weather: { label: "Weather", emoji: "\u{1F321}\uFE0F", color: "#39ff7f", desc: "NOAA \u2192 temperature markets, every 2 min" },
+  btc:     { label: "BTC Sprint", emoji: "\u20BF", color: "#f59e0b", desc: "Binance momentum \u2192 BTC markets, every 5 min" },
+  eia:     { label: "EIA Crude", emoji: "\u{1F6E2}\uFE0F", color: "#60a5fa", desc: "Wed 16:30 CET, crude oil inventories" },
+  fred:    { label: "FRED Macro", emoji: "\u{1F4CA}", color: "#a78bfa", desc: "M-F 15:30 CET, CPI/employment data" },
 };
 
-export const SIMMER_API = "https://api.simmer.markets";
-export const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
-export const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
-export const POLYMARKET_CLOB_API = "https://clob.polymarket.com";
-export const VPS_DATA_URL = "http://194.163.160.76:8899";
+export const BOT_IDS: BotId[] = ["weather", "btc", "eia", "fred"];

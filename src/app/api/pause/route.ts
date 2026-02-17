@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { getMarkets } from "@/lib/api";
+import { pauseAll } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function POST(request: Request) {
   try {
-    const data = await getMarkets();
+    const body = await request.json();
+    const data = await pauseAll(body.paused);
     return NextResponse.json(data);
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 502 });

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SIMMER // WEATHER OPS",
-  description: "Clawdbot Weather Market Tracker — Polymarket via Simmer.markets",
+  title: "CLAWDBOT // OPS",
+  description: "Trading bot dashboard — Weather, BTC, EIA, FRED bots on Polymarket via Simmer",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
