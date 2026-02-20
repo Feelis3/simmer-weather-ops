@@ -22,83 +22,64 @@ export default function MarketsTable({ markets }: Props) {
     .slice(0, 15);
 
   return (
-    <div className="panel p-4">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-green-dim/40 text-xs">&gt;</span>
-        <h2 className="text-xs font-bold tracking-widest uppercase text-green-matrix">
+    <div className="card p-5 animate-fade-in">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xs font-semibold text-text-primary tracking-wide">
           Markets Scanner
-        </h2>
-        <span className="ml-2 text-[0.6rem] text-cyan-glow tabular-nums">
-          [{markets.length}]
-        </span>
+        </h3>
+        <span className="pill bg-cyan/10 text-cyan">{markets.length}</span>
       </div>
 
       {sorted.length === 0 ? (
         <div className="py-8 text-center">
-          <p className="text-green-dim/30 text-xs font-mono">
-            &gt; NO MARKETS DATA
-          </p>
-          <p className="text-green-dim/20 text-[0.6rem] mt-1">
-            Scanning for opportunities...
-          </p>
+          <p className="text-text-muted text-xs">Scanning for opportunities...</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Question</th>
-                <th>Prob</th>
-                <th>Div</th>
-                <th>Vol 24h</th>
-                <th>Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((m) => {
-                const absDivergence = Math.abs(m.divergence * 100);
-                const divColor =
-                  absDivergence > 15
-                    ? "text-red-alert"
-                    : absDivergence > 10
-                    ? "text-amber-warm"
-                    : "text-green-dim/50";
+        <div className="space-y-0.5">
+          {sorted.map((m) => {
+            const absDivergence = Math.abs(m.divergence * 100);
+            const divColor =
+              absDivergence > 15
+                ? "text-red"
+                : absDivergence > 10
+                ? "text-amber"
+                : "text-text-secondary";
 
-                return (
-                  <tr key={m.id}>
-                    <td
-                      className="max-w-[250px] truncate text-green-dim"
-                      title={m.question}
-                    >
-                      {truncate(m.question, 60)}
-                    </td>
-                    <td className="tabular-nums text-cyan-glow">
+            return (
+              <div key={m.id} className="flex items-center gap-3 py-2.5 px-3 rounded-xl hover:bg-bg-hover transition-colors">
+                {/* Question */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-text-secondary truncate" title={m.question}>
+                    {truncate(m.question, 55)}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-[0.55rem] text-cyan tabular-nums">
                       {(m.current_probability * 100).toFixed(1)}%
-                    </td>
-                    <td className={`tabular-nums font-bold ${divColor}`}>
-                      {(m.divergence * 100).toFixed(1)}%
-                    </td>
-                    <td className="tabular-nums text-green-dim/50">
+                    </span>
+                    <span className={`text-[0.55rem] font-semibold tabular-nums ${divColor}`}>
+                      {(m.divergence * 100).toFixed(1)}% div
+                    </span>
+                    <span className="text-[0.55rem] text-text-muted tabular-nums">
                       {formatVolume(m.volume_24h)}
-                    </td>
-                    <td className="tabular-nums">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[0.55rem] font-bold ${
-                          m.opportunity_score >= 0.7
-                            ? "bg-green-matrix/10 text-green-matrix"
-                            : m.opportunity_score >= 0.4
-                            ? "bg-amber-warm/10 text-amber-warm"
-                            : "bg-green-dim/10 text-green-dim/40"
-                        }`}
-                      >
-                        {m.opportunity_score.toFixed(2)}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Score */}
+                <span
+                  className={`pill text-[0.55rem] font-semibold tabular-nums ${
+                    m.opportunity_score >= 0.7
+                      ? "bg-neon/10 text-neon"
+                      : m.opportunity_score >= 0.4
+                      ? "bg-amber/10 text-amber"
+                      : "bg-bg-hover text-text-muted"
+                  }`}
+                >
+                  {m.opportunity_score.toFixed(2)}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

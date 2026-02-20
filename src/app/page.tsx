@@ -22,8 +22,6 @@ import type {
   Trade,
 } from "@/lib/types";
 
-// ─── State ─────────────────────────────────────────────
-
 interface DashboardState {
   status: StatusResponse | null;
   trades: TradesResponse | null;
@@ -34,8 +32,6 @@ interface DashboardState {
   logs: Record<string, string>;
   error: string | null;
 }
-
-// ─── Main Dashboard ────────────────────────────────────
 
 export default function Dashboard() {
   const [state, setState] = useState<DashboardState>({
@@ -54,62 +50,72 @@ export default function Dashboard() {
   const btcTimerRef = useRef<ReturnType<typeof setInterval>>(null);
   const router = useRouter();
 
-  // ── Fetch ──────────────────────────────────────────
+  // Progressive fetch: fast endpoints first, then slow ones
+  const fetchFast = useCallback(async () => {
+    const [btcRes, cronsRes, marketsRes] = await Promise.allSettled([
+      fetch("/api/btc").then((r) => r.json()),
+      fetch("/api/crons").then((r) => r.json()),
+      fetch("/api/markets").then((r) => r.json()),
+    ]);
+    setState((prev) => ({
+      ...prev,
+      btc: btcRes.status === "fulfilled" ? btcRes.value : prev.btc,
+      crons: cronsRes.status === "fulfilled" ? cronsRes.value : prev.crons,
+      markets: marketsRes.status === "fulfilled" ? marketsRes.value : prev.markets,
+    }));
+  }, []);
+
+  const fetchSlow = useCallback(async () => {
+    const [statusRes, tradesRes, lbRes, ...logResults] = await Promise.allSettled([
+      fetch("/api/status").then((r) => r.json()),
+      fetch("/api/trades").then((r) => r.json()),
+      fetch("/api/leaderboard").then((r) => r.json()),
+      ...BOT_IDS.map((bot) => fetch(`/api/logs/${bot}?lines=50`).then((r) => r.json())),
+    ]);
+
+    const logs: Record<string, string> = {};
+    BOT_IDS.forEach((bot, i) => {
+      const result = logResults[i];
+      if (result.status === "fulfilled") logs[bot] = result.value?.log ?? "";
+    });
+
+    setState((prev) => ({
+      ...prev,
+      status: statusRes.status === "fulfilled" ? statusRes.value : prev.status,
+      trades: tradesRes.status === "fulfilled" ? tradesRes.value : prev.trades,
+      leaderboard: lbRes.status === "fulfilled" ? lbRes.value : prev.leaderboard,
+      logs,
+      error: null,
+    }));
+  }, []);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statusRes, tradesRes, marketsRes, btcRes, lbRes, cronsRes, ...logResults] = await Promise.allSettled([
-        fetch("/api/status").then((r) => r.json()),
-        fetch("/api/trades").then((r) => r.json()),
-        fetch("/api/markets").then((r) => r.json()),
-        fetch("/api/btc").then((r) => r.json()),
-        fetch("/api/leaderboard").then((r) => r.json()),
-        fetch("/api/crons").then((r) => r.json()),
-        ...BOT_IDS.map((bot) => fetch(`/api/logs/${bot}?lines=50`).then((r) => r.json())),
-      ]);
-
-      const logs: Record<string, string> = {};
-      BOT_IDS.forEach((bot, i) => {
-        const result = logResults[i];
-        if (result.status === "fulfilled") logs[bot] = result.value?.log ?? "";
-      });
-
-      setState((prev) => ({
-        ...prev,
-        status: statusRes.status === "fulfilled" ? statusRes.value : prev.status,
-        trades: tradesRes.status === "fulfilled" ? tradesRes.value : prev.trades,
-        markets: marketsRes.status === "fulfilled" ? marketsRes.value : prev.markets,
-        btc: btcRes.status === "fulfilled" ? btcRes.value : prev.btc,
-        leaderboard: lbRes.status === "fulfilled" ? lbRes.value : prev.leaderboard,
-        crons: cronsRes.status === "fulfilled" ? cronsRes.value : prev.crons,
-        logs,
-        error: null,
-      }));
+      // Fire fast endpoints immediately, don't wait for slow ones
+      fetchFast();
+      await fetchSlow();
     } catch (e) {
       setState((prev) => ({ ...prev, error: String(e) }));
     }
-  }, []);
-
-  const fetchBtc = useCallback(async () => {
-    try {
-      const res = await fetch("/api/btc");
-      const data = await res.json();
-      if (!data.error) setState((prev) => ({ ...prev, btc: data }));
-    } catch { /* ignore */ }
-  }, []);
+  }, [fetchFast, fetchSlow]);
 
   useEffect(() => {
-    fetchAll();
+    // Progressive: fast data loads instantly, slow follows
+    fetchFast();
+    fetchSlow();
     timerRef.current = setInterval(fetchAll, 30000);
-    btcTimerRef.current = setInterval(fetchBtc, 15000);
+    btcTimerRef.current = setInterval(() => {
+      fetch("/api/btc").then((r) => r.json()).then((data) => {
+        if (!data.error) setState((prev) => ({ ...prev, btc: data }));
+      }).catch(() => {});
+    }, 15000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (btcTimerRef.current) clearInterval(btcTimerRef.current);
     };
-  }, [fetchAll, fetchBtc]);
+  }, [fetchFast, fetchSlow, fetchAll]);
 
-  // ── Actions ────────────────────────────────────────
-
+  // Actions
   const handleToggle = async (bot: BotId, enabled: boolean) => {
     await fetch(`/api/toggle/${bot}`, {
       method: "POST",
@@ -140,8 +146,7 @@ export default function Dashboard() {
     fetchAll();
   };
 
-  // ── Derived data (filter out SIM) ──────────────────
-
+  // Derived data (filter out SIM)
   const portfolio = state.status?.portfolio;
   const account = state.status?.account;
   const allPositions = state.status?.positions?.positions ?? [];
@@ -151,32 +156,32 @@ export default function Dashboard() {
   const markets = state.markets?.markets ?? [];
   const polyPnl = state.status?.positions?.polymarket_pnl ?? 0;
 
-  // ── Render ─────────────────────────────────────────
+  const hasData = state.btc || state.crons || state.status;
 
   return (
-    <div className="min-h-screen bg-terminal text-green-dim/70 font-mono">
-      {/* ─── HEADER ─────────────────────────────────────── */}
-      <header className="border-b border-panel-border bg-panel/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-[1440px] mx-auto px-4 py-2.5">
-          <div className="flex items-center justify-between gap-3">
+    <div className="min-h-screen bg-bg text-text-primary font-sans">
+      {/* Header */}
+      <header className="border-b border-border bg-bg-card/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-[1440px] mx-auto px-5 py-3">
+          <div className="flex items-center justify-between gap-4">
             {/* Brand */}
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-green-matrix font-bold text-sm tracking-widest animate-glow-pulse">CLAWDBOT</span>
-              <span className="text-green-dim/15 text-xs">//</span>
-              <span className="text-amber-warm/60 text-[0.55rem] font-bold tracking-widest">OPS</span>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <span className="text-neon font-bold text-sm tracking-wider glow-neon">CLAWDBOT</span>
+              <span className="text-text-muted text-xs">//</span>
+              <span className="text-pink text-[0.6rem] font-semibold tracking-wider">OPS</span>
             </div>
 
             {/* Stats bar */}
             <div className="flex items-center gap-4 overflow-x-auto">
-              <Stat label="USDC" value={`$${(portfolio?.balance_usdc ?? 0).toFixed(2)}`} color="text-green-matrix" />
+              <HeaderStat label="USDC" value={`$${(portfolio?.balance_usdc ?? 0).toFixed(2)}`} color="text-neon" />
               <Sep />
-              <Stat
+              <HeaderStat
                 label="P&L"
                 value={`${polyPnl >= 0 ? "+" : ""}$${polyPnl.toFixed(2)}`}
-                color={polyPnl >= 0 ? "text-green-matrix" : "text-red-alert"}
+                color={polyPnl >= 0 ? "text-neon" : "text-red"}
               />
               <Sep />
-              <Stat label="Exposure" value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`} color="text-amber-warm" />
+              <HeaderStat label="Exposure" value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`} color="text-amber" />
               <Sep />
               <BtcWidget data={state.btc} />
               <Sep />
@@ -187,90 +192,110 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handlePause}
-                className={`px-2.5 py-1 rounded text-[0.5rem] font-bold tracking-wider transition-all border ${
+                className={`pill px-3 py-1 text-[0.6rem] font-semibold transition-all ${
                   paused
-                    ? "bg-red-alert/15 text-red-alert border-red-alert/30 hover:bg-red-alert/25"
-                    : "bg-green-matrix/8 text-green-matrix/70 border-green-matrix/15 hover:bg-green-matrix/15"
+                    ? "bg-red/15 text-red hover:bg-red/25"
+                    : "bg-neon/10 text-neon hover:bg-neon/20"
                 }`}
               >
-                {paused ? "RESUME" : "PAUSE"}
+                {paused ? "Resume" : "Pause"}
               </button>
               <button
                 onClick={handleLogout}
-                className="px-2 py-1 rounded text-[0.45rem] font-bold tracking-wider text-green-dim/15 hover:text-red-alert/50 transition-all"
+                className="text-[0.55rem] font-medium text-text-muted hover:text-red transition-all px-2 py-1"
                 title="Logout"
               >
-                EXIT
+                Exit
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* ─── MAIN CONTENT ───────────────────────────────── */}
-      <main className="max-w-[1440px] mx-auto px-4 py-4 space-y-4">
+      {/* Main */}
+      <main className="max-w-[1440px] mx-auto px-5 py-5 space-y-5">
         {/* Error */}
         {state.error && (
-          <div className="panel p-3 border-red-alert/20">
-            <span className="text-red-alert text-[0.55rem] font-bold">VPS ERROR: </span>
-            <span className="text-red-alert/50 text-[0.5rem]">{state.error}</span>
+          <div className="card p-4 border-red/20">
+            <span className="text-red text-xs font-semibold">VPS Error: </span>
+            <span className="text-red/60 text-xs">{state.error}</span>
           </div>
         )}
 
-        {/* ── Row 1: Bot cards + Chart ────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {/* Row 1: Bot cards + Chart */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Bot cards - 2x2 grid */}
-          <div className="lg:col-span-2 grid grid-cols-2 gap-3">
-            {BOT_IDS.map((bot) => (
-              <BotCard
-                key={bot}
-                botId={bot}
-                active={state.crons?.bots?.[bot]?.active ?? false}
-                log={state.logs[bot] ?? ""}
-                onToggle={(enabled) => handleToggle(bot, enabled)}
-                onRun={() => handleRun(bot)}
-              />
-            ))}
+          <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+            {hasData ? (
+              BOT_IDS.map((bot) => (
+                <BotCard
+                  key={bot}
+                  botId={bot}
+                  active={state.crons?.bots?.[bot]?.active ?? false}
+                  log={state.logs[bot] ?? ""}
+                  onToggle={(enabled) => handleToggle(bot, enabled)}
+                  onRun={() => handleRun(bot)}
+                />
+              ))
+            ) : (
+              <>
+                <Skeleton className="h-[180px]" />
+                <Skeleton className="h-[180px]" />
+                <Skeleton className="h-[180px]" />
+                <Skeleton className="h-[180px]" />
+              </>
+            )}
           </div>
 
-          {/* P&L Chart */}
-          <div>
-            <PnlChart trades={allTrades} currentPnl={polyPnl} />
+          {/* P&L Chart + Stats */}
+          <div className="space-y-4">
+            {state.trades ? (
+              <PnlChart trades={allTrades} currentPnl={polyPnl} />
+            ) : (
+              <Skeleton className="h-[230px]" />
+            )}
 
-            {/* Quick stats under chart */}
-            <div className="grid grid-cols-3 gap-2 mt-3">
-              <MiniStat label="Positions" value={String(positions.length)} color="text-purple-fade" />
-              <MiniStat label="Trades" value={String(trades.length)} color="text-cyan-glow" />
+            <div className="grid grid-cols-3 gap-3">
+              <MiniStat label="Positions" value={String(positions.length)} color="text-purple" />
+              <MiniStat label="Trades" value={String(trades.length)} color="text-cyan" />
               <MiniStat
                 label="Win Rate"
                 value={account?.win_rate != null ? `${(account.win_rate * 100).toFixed(0)}%` : "---"}
-                color="text-green-matrix"
+                color="text-neon"
               />
             </div>
           </div>
         </div>
 
-        {/* ── Row 2: Positions + Recent Trades ────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <PositionsTable positions={positions} />
-          <TradesTimeline trades={trades} />
+        {/* Row 2: Positions + Trades */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {state.status ? (
+            <PositionsTable positions={positions} />
+          ) : (
+            <Skeleton className="h-[200px]" />
+          )}
+          {state.trades ? (
+            <TradesTimeline trades={trades} />
+          ) : (
+            <Skeleton className="h-[200px]" />
+          )}
         </div>
 
-        {/* ── Row 3: Logs + Markets ───────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Row 3: Logs + Markets */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Logs */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-terminal-dark/50 border border-panel-border">
+          <div className="space-y-3">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-bg-card border border-border">
               {BOT_IDS.map((bot) => (
                 <button
                   key={bot}
                   onClick={() => setLogBot(bot)}
-                  className={`px-2.5 py-1 rounded text-[0.5rem] font-bold tracking-wider transition-all flex-1 ${
-                    logBot === bot ? "shadow-sm" : "text-green-dim/25 hover:text-green-dim/50"
+                  className={`px-3 py-1.5 rounded-lg text-[0.6rem] font-semibold tracking-wide transition-all flex-1 ${
+                    logBot === bot ? "" : "text-text-muted hover:text-text-secondary"
                   }`}
-                  style={logBot === bot ? { backgroundColor: BOTS[bot].color + "12", color: BOTS[bot].color } : undefined}
+                  style={logBot === bot ? { backgroundColor: BOTS[bot].color + "15", color: BOTS[bot].color } : undefined}
                 >
-                  {BOTS[bot].emoji} {BOTS[bot].label.toUpperCase()}
+                  {BOTS[bot].emoji} {BOTS[bot].label}
                 </button>
               ))}
             </div>
@@ -278,19 +303,23 @@ export default function Dashboard() {
           </div>
 
           {/* Markets */}
-          <MarketsTable markets={markets} />
+          {state.markets ? (
+            <MarketsTable markets={markets} />
+          ) : (
+            <Skeleton className="h-[300px]" />
+          )}
         </div>
       </main>
 
-      {/* ─── FOOTER ──────────────────────────────────────── */}
-      <footer className="border-t border-panel-border mt-6 py-2">
-        <div className="max-w-[1440px] mx-auto px-4 flex items-center justify-between">
-          <span className="text-[0.45rem] text-green-dim/12">
+      {/* Footer */}
+      <footer className="border-t border-border mt-8 py-3">
+        <div className="max-w-[1440px] mx-auto px-5 flex items-center justify-between">
+          <span className="text-[0.55rem] text-text-muted">
             VPS 194.163.160.76:8420 &middot; 30s refresh
           </span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1 h-1 rounded-full bg-green-matrix/40 animate-pulse" />
-            <span className="text-[0.45rem] text-green-dim/12 tabular-nums">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-neon/40 animate-pulse-neon" />
+            <span className="text-[0.55rem] text-text-muted tabular-nums">
               {state.status?.timestamp ? new Date(state.status.timestamp).toLocaleTimeString() : "---"}
             </span>
           </div>
@@ -300,26 +329,30 @@ export default function Dashboard() {
   );
 }
 
-// ─── Tiny helper components ────────────────────────────
+// ─── Helper components ────────────────────────────────
 
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+function HeaderStat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="hidden md:flex items-center gap-1.5">
-      <span className="text-[0.45rem] text-green-dim/20 uppercase tracking-wider">{label}</span>
+      <span className="text-[0.5rem] text-text-muted uppercase tracking-wider">{label}</span>
       <span className={`text-[0.7rem] font-bold tabular-nums ${color}`}>{value}</span>
     </div>
   );
 }
 
 function Sep() {
-  return <div className="hidden md:block w-px h-4 bg-panel-border/50" />;
+  return <div className="hidden md:block w-px h-4 bg-border" />;
 }
 
 function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="panel p-2.5 text-center">
-      <div className="text-[0.45rem] text-green-dim/20 uppercase tracking-wider">{label}</div>
-      <div className={`text-base font-bold tabular-nums ${color}`}>{value}</div>
+    <div className="card p-3 text-center">
+      <div className="text-[0.55rem] text-text-muted uppercase tracking-wider mb-1">{label}</div>
+      <div className={`text-lg font-bold tabular-nums ${color}`}>{value}</div>
     </div>
   );
+}
+
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`skeleton ${className ?? ""}`} />;
 }

@@ -26,60 +26,55 @@ export default function LoginPage() {
         router.push("/");
         router.refresh();
       } else {
-        setError("ACCESS DENIED - Invalid credentials");
+        setError("Invalid credentials");
         setPassword("");
       }
     } catch {
-      setError("CONNECTION FAILED - Server unreachable");
+      setError("Server unreachable");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-terminal flex items-center justify-center px-4">
-      {/* Background effects */}
+    <div className="min-h-screen bg-bg flex items-center justify-center px-4">
+      {/* Background gradient */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-gradient-to-b from-green-matrix/[0.02] via-transparent to-green-matrix/[0.01]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-neon/[0.02] via-transparent to-pink/[0.01]" />
       </div>
 
-      <div className="relative w-full max-w-sm">
+      <div className="relative w-full max-w-sm animate-fade-in">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="text-green-matrix font-bold text-2xl tracking-[0.3em] animate-glow-pulse mb-2">
+          <div className="text-neon font-bold text-2xl tracking-wider glow-neon mb-2">
             CLAWDBOT
           </div>
-          <div className="text-green-dim/20 text-[0.6rem] tracking-widest uppercase">
-            Operations Terminal v2.0
-          </div>
-          <div className="mt-3 flex justify-center gap-1">
-            <div className="w-8 h-px bg-green-matrix/20" />
-            <div className="w-2 h-px bg-green-matrix/40" />
-            <div className="w-8 h-px bg-green-matrix/20" />
+          <div className="text-text-muted text-xs tracking-wider">
+            Operations Dashboard
           </div>
         </div>
 
         {/* Login form */}
-        <form onSubmit={handleSubmit} className="panel p-6 space-y-5">
-          {/* Terminal prompt */}
-          <div className="flex items-center gap-2 pb-3 border-b border-panel-border">
-            <div className="w-2 h-2 rounded-full bg-green-matrix/60 animate-pulse" />
-            <span className="text-[0.6rem] text-green-matrix/60 font-bold tracking-widest uppercase">
-              Authentication Required
+        <form onSubmit={handleSubmit} className="card p-7 space-y-5">
+          {/* Header */}
+          <div className="flex items-center gap-2 pb-4 border-b border-border">
+            <div className="w-2 h-2 rounded-full bg-neon/60 animate-pulse-neon" />
+            <span className="text-xs text-text-secondary font-semibold tracking-wide">
+              Sign in to continue
             </span>
           </div>
 
           {/* Username */}
-          <div className="space-y-1.5">
-            <label className="text-[0.55rem] text-green-dim/30 uppercase tracking-wider font-medium block">
-              &gt; User ID
+          <div className="space-y-2">
+            <label className="text-xs text-text-secondary font-medium block">
+              Username
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-terminal-dark/80 border border-panel-border rounded-md px-3 py-2.5 text-sm text-green-matrix font-mono placeholder:text-green-dim/15 focus:outline-none focus:border-green-matrix/40 focus:ring-1 focus:ring-green-matrix/20 transition-all"
-              placeholder="username"
+              className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon/40 focus:ring-1 focus:ring-neon/20 transition-all"
+              placeholder="Enter username"
               autoComplete="username"
               autoFocus
               required
@@ -87,16 +82,16 @@ export default function LoginPage() {
           </div>
 
           {/* Password */}
-          <div className="space-y-1.5">
-            <label className="text-[0.55rem] text-green-dim/30 uppercase tracking-wider font-medium block">
-              &gt; Access Key
+          <div className="space-y-2">
+            <label className="text-xs text-text-secondary font-medium block">
+              Password
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-terminal-dark/80 border border-panel-border rounded-md px-3 py-2.5 text-sm text-green-matrix font-mono placeholder:text-green-dim/15 focus:outline-none focus:border-green-matrix/40 focus:ring-1 focus:ring-green-matrix/20 transition-all"
-              placeholder="********"
+              className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon/40 focus:ring-1 focus:ring-neon/20 transition-all"
+              placeholder="Enter password"
               autoComplete="current-password"
               required
             />
@@ -104,9 +99,9 @@ export default function LoginPage() {
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 p-2.5 rounded-md bg-red-alert/5 border border-red-alert/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-alert animate-pulse" />
-              <span className="text-red-alert text-[0.6rem] font-bold tracking-wider">{error}</span>
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-red/5 border border-red/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-red animate-pulse" />
+              <span className="text-red text-xs font-semibold">{error}</span>
             </div>
           )}
 
@@ -114,32 +109,25 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-md text-[0.65rem] font-bold tracking-[0.2em] uppercase transition-all border disabled:opacity-50 disabled:cursor-not-allowed bg-green-matrix/10 text-green-matrix border-green-matrix/30 hover:bg-green-matrix/20 hover:shadow-[0_0_15px_rgba(57,255,127,0.1)]"
+            className="w-full py-3 rounded-xl text-sm font-semibold tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-neon/10 text-neon hover:bg-neon/20 border-glow-neon"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-matrix animate-pulse" />
-                Authenticating...
+                <div className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse-neon" />
+                Signing in...
               </span>
             ) : (
-              "Access System"
+              "Sign In"
             )}
           </button>
 
           {/* Footer */}
-          <div className="pt-3 border-t border-panel-border">
-            <p className="text-[0.45rem] text-green-dim/15 text-center tracking-wider">
-              Session persists for 30 days &middot; Secure cookie auth
+          <div className="pt-3 border-t border-border">
+            <p className="text-[0.55rem] text-text-muted text-center">
+              Session persists for 30 days
             </p>
           </div>
         </form>
-
-        {/* Bottom decoration */}
-        <div className="mt-6 text-center">
-          <span className="text-[0.45rem] text-green-dim/10 tracking-widest">
-            POLYMARKET &middot; SIMMER &middot; WEATHER &middot; BTC &middot; EIA &middot; FRED
-          </span>
-        </div>
       </div>
     </div>
   );

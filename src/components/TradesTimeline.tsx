@@ -24,31 +24,30 @@ export default function TradesTimeline({ trades }: Props) {
   const shown = trades.slice(0, 15);
 
   return (
-    <div className="panel p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-green-dim/40 text-xs">&gt;</span>
-        <span className="text-[0.6rem] font-bold tracking-widest uppercase text-green-dim/40">
+    <div className="card p-5 animate-fade-in">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xs font-semibold text-text-primary tracking-wide">
           Recent Trades
-        </span>
-        <span className="text-[0.55rem] text-cyan-glow/60 tabular-nums">[{trades.length}]</span>
+        </h3>
+        <span className="pill bg-cyan/10 text-cyan">{trades.length}</span>
       </div>
 
       {shown.length === 0 ? (
-        <div className="py-6 text-center">
-          <p className="text-green-dim/20 text-[0.6rem]">No trades yet</p>
+        <div className="py-8 text-center">
+          <p className="text-text-muted text-xs">No trades yet</p>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {shown.map((t, i) => {
             const isBuy = t.action.toLowerCase() === "buy";
             return (
-              <div key={t.id || i} className="flex items-start gap-2.5 py-1.5 px-2 rounded-md hover:bg-panel-hover/30 transition-colors border-b border-panel-border/20 last:border-0">
+              <div key={t.id || i} className="flex items-start gap-3 py-2.5 px-3 rounded-xl hover:bg-bg-hover transition-colors">
                 {/* Action badge */}
                 <div className="shrink-0 mt-0.5">
-                  <span className={`inline-block w-[42px] text-center py-0.5 rounded text-[0.5rem] font-bold uppercase ${
+                  <span className={`pill text-[0.55rem] ${
                     isBuy
-                      ? "bg-green-matrix/10 text-green-matrix"
-                      : "bg-amber-warm/10 text-amber-warm"
+                      ? "bg-neon/10 text-neon"
+                      : "bg-amber/10 text-amber"
                   }`}>
                     {t.action}
                   </span>
@@ -56,28 +55,28 @@ export default function TradesTimeline({ trades }: Props) {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-[0.55rem] text-green-dim/55 truncate leading-snug" title={t.market_question}>
+                  <p className="text-xs text-text-secondary truncate" title={t.market_question}>
                     {t.market_question}
                   </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[0.45rem] text-green-dim/25 tabular-nums">
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[0.55rem] text-text-muted tabular-nums">
                       {t.side.toUpperCase()} &middot; {t.shares.toFixed(1)} @ ${t.cost.toFixed(3)}
                     </span>
                     {t.source && (
-                      <span className="text-[0.4rem] px-1 py-0.5 rounded bg-purple-fade/8 text-purple-fade/50">
+                      <span className="pill bg-purple/8 text-purple/60 text-[0.5rem]">
                         {t.source}
                       </span>
                     )}
                   </div>
                   {t.reasoning && (
-                    <p className="text-[0.45rem] text-green-dim/20 italic mt-0.5 truncate" title={t.reasoning}>
+                    <p className="text-[0.5rem] text-text-muted/60 italic mt-0.5 truncate" title={t.reasoning}>
                       {t.reasoning}
                     </p>
                   )}
                 </div>
 
                 {/* Time */}
-                <span className="text-[0.45rem] text-green-dim/15 tabular-nums shrink-0 mt-0.5">
+                <span className="text-[0.55rem] text-text-muted tabular-nums shrink-0 mt-0.5">
                   {relativeTime(t.created_at)}
                 </span>
               </div>
