@@ -154,7 +154,7 @@ export default function Dashboard() {
   const allTrades = state.trades?.trades ?? [];
   const trades: Trade[] = allTrades.filter((t) => t.venue === "polymarket");
   const markets = state.markets?.markets ?? [];
-  const polyPnl = state.status?.positions?.polymarket_pnl ?? 0;
+  const polyPnl = state.status?.account?.polymarket_pnl ?? state.status?.portfolio?.pnl_total ?? 0;
 
   const hasData = state.btc || state.crons || state.status;
 

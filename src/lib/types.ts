@@ -150,6 +150,7 @@ export interface AccountInfo {
   real_trading_enabled: boolean;
   created_at: string;
   last_trade_at: string | null;
+  polymarket_pnl?: number;
 }
 
 export interface StatusResponse {
