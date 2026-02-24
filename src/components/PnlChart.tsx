@@ -7,6 +7,7 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 import type { Trade } from "@/lib/types";
 
@@ -46,14 +47,10 @@ export default function PnlChart({ trades, currentPnl }: Props) {
     };
   });
 
-  if (chartData.length > 0) {
-    chartData.push({ label: "Now", pnl: parseFloat(currentPnl.toFixed(2)) });
-  } else {
-    chartData.push({ label: "Now", pnl: parseFloat(currentPnl.toFixed(2)) });
-  }
+  chartData.push({ label: "Now", pnl: parseFloat(currentPnl.toFixed(2)) });
 
-  const minPnl = Math.min(...chartData.map((d) => d.pnl));
-  const maxPnl = Math.max(...chartData.map((d) => d.pnl));
+  const minPnl = Math.min(0, ...chartData.map((d) => d.pnl));
+  const maxPnl = Math.max(0, ...chartData.map((d) => d.pnl));
   const isPositive = currentPnl >= 0;
   const color = isPositive ? "#03E78B" : "#ff4466";
 
@@ -72,7 +69,7 @@ export default function PnlChart({ trades, currentPnl }: Props) {
           <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
             <defs>
               <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={color} stopOpacity={0.15} />
+                <stop offset="5%" stopColor={color} stopOpacity={0.2} />
                 <stop offset="95%" stopColor={color} stopOpacity={0} />
               </linearGradient>
             </defs>
@@ -91,6 +88,7 @@ export default function PnlChart({ trades, currentPnl }: Props) {
               tickLine={false}
               width={35}
             />
+            <ReferenceLine y={0} stroke="#2a2a2a" strokeDasharray="3 3" />
             <Tooltip content={<CustomTooltip />} />
             <Area
               type="monotone"

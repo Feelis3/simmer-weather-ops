@@ -256,11 +256,22 @@ export default function Dashboard() {
             )}
 
             <div className="grid grid-cols-3 gap-3">
-              <MiniStat label="Positions" value={String(positions.length)} color="text-purple" />
-              <MiniStat label="Trades" value={String(trades.length)} color="text-cyan" />
+              <MiniStat
+                label="Positions"
+                value={String(positions.length)}
+                sub={`$${(portfolio?.total_exposure ?? 0).toFixed(0)} exp`}
+                color="text-purple"
+              />
+              <MiniStat
+                label="Trades"
+                value={String(trades.length)}
+                sub={account ? `${account.win_count ?? 0}W ${account.loss_count ?? 0}L` : undefined}
+                color="text-cyan"
+              />
               <MiniStat
                 label="Win Rate"
                 value={account?.win_rate != null ? `${(account.win_rate * 100).toFixed(0)}%` : "---"}
+                sub={account?.total_pnl_percent != null ? `${account.total_pnl_percent >= 0 ? "+" : ""}${account.total_pnl_percent.toFixed(1)}% total` : undefined}
                 color="text-neon"
               />
             </div>
@@ -344,11 +355,12 @@ function Sep() {
   return <div className="hidden md:block w-px h-4 bg-border" />;
 }
 
-function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
+function MiniStat({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
   return (
     <div className="card p-3 text-center">
       <div className="text-[0.55rem] text-text-muted uppercase tracking-wider mb-1">{label}</div>
       <div className={`text-lg font-bold tabular-nums ${color}`}>{value}</div>
+      {sub && <div className="text-[0.5rem] text-text-muted tabular-nums mt-0.5">{sub}</div>}
     </div>
   );
 }
