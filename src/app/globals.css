@@ -1,30 +1,30 @@
 @import "tailwindcss";
 
 @theme {
-  /* Core background */
-  --color-bg: #000000;
-  --color-bg-card: #0a0a0a;
-  --color-bg-elevated: #111111;
-  --color-bg-hover: #1a1a1a;
+  /* ── Backgrounds: dark navy instead of pure black ── */
+  --color-bg: #05091a;
+  --color-bg-card: #0b1229;
+  --color-bg-elevated: #111d36;
+  --color-bg-hover: #172340;
 
-  /* Accent palette — neon vibrant */
+  /* ── Accents ── */
   --color-neon: #03E78B;
-  --color-neon-dim: #03b86e;
-  --color-pink: #FF95EE;
+  --color-neon-dim: #02b86d;
+  --color-pink: #ff79c6;
   --color-cyan: #22d3ee;
   --color-red: #ff4466;
-  --color-amber: #ffaa00;
-  --color-purple: #b48eff;
+  --color-amber: #ffb700;
+  --color-purple: #a78bfa;
   --color-blue: #60a5fa;
 
-  /* Text */
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #888888;
-  --color-text-muted: #444444;
+  /* ── Text ── */
+  --color-text-primary: #dde8ff;
+  --color-text-secondary: #6b80a0;
+  --color-text-muted: #354d6a;
 
-  /* Borders */
-  --color-border: #1a1a1a;
-  --color-border-light: #2a2a2a;
+  /* ── Borders ── */
+  --color-border: #1b2d4a;
+  --color-border-light: #263f62;
 
   --font-sans: "Inter", "SF Pro Display", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
@@ -33,70 +33,85 @@
 /* ─── Scrollbar ─────────────────────────────── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #03E78B15 transparent;
+  scrollbar-color: rgba(3, 231, 139, 0.12) transparent;
 }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #03E78B15; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #03E78B30; }
+::-webkit-scrollbar-thumb { background: rgba(3, 231, 139, 0.12); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(3, 231, 139, 0.25); }
 
 /* ─── Base ──────────────────────────────────── */
 body {
-  background: #000000;
-  color: #ffffff;
+  background-color: #05091a;
+  color: #dde8ff;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Dot grid + soft top glow */
+  background-image:
+    radial-gradient(ellipse 90% 50% at 50% -5%, rgba(3, 231, 139, 0.07) 0%, transparent 70%),
+    radial-gradient(rgba(27, 45, 74, 0.55) 1px, transparent 1px);
+  background-size: 100% 900px, 26px 26px;
+  background-attachment: fixed;
 }
 
 /* ─── Animations ────────────────────────────── */
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes pulse-neon {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 
-.animate-fade-in { animation: fade-in 0.4s ease-out; }
-.animate-pulse-neon { animation: pulse-neon 2s ease-in-out infinite; }
+@keyframes spin-refresh {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 
+.animate-fade-in     { animation: fade-in 0.35s ease-out; }
+.animate-pulse-neon  { animation: pulse-neon 2s ease-in-out infinite; }
+.animate-spin-refresh { animation: spin-refresh 0.7s linear infinite; }
+
+/* ─── Skeleton ──────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, #111 25%, #1a1a1a 50%, #111 75%);
+  background: linear-gradient(90deg, #0b1229 25%, #162240 50%, #0b1229 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 6px;
+  animation: shimmer 1.6s infinite;
+  border-radius: 8px;
 }
 
 /* ─── Card ──────────────────────────────────── */
 .card {
-  background: #0a0a0a;
-  border: 1px solid #1a1a1a;
-  border-radius: 16px;
+  background: linear-gradient(145deg, #0c1328 0%, #0e1630 100%);
+  border: 1px solid #1b2d4a;
+  border-radius: 14px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .card:hover {
-  border-color: #2a2a2a;
+  border-color: #263f62;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 /* Panel (legacy compat) */
 .panel {
-  background: #0a0a0a;
-  border: 1px solid #1a1a1a;
-  border-radius: 16px;
+  background: linear-gradient(145deg, #0c1328 0%, #0e1630 100%);
+  border: 1px solid #1b2d4a;
+  border-radius: 14px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-
 .panel:hover {
-  border-color: #2a2a2a;
+  border-color: #263f62;
 }
 
 /* ─── Pill badge ────────────────────────────── */
@@ -112,31 +127,37 @@ body {
 
 /* ─── Neon glow effects ─────────────────────── */
 .glow-neon {
-  text-shadow: 0 0 8px rgba(3, 231, 139, 0.4), 0 0 20px rgba(3, 231, 139, 0.15);
+  text-shadow:
+    0 0 10px rgba(3, 231, 139, 0.55),
+    0 0 30px rgba(3, 231, 139, 0.2);
 }
 
 .glow-pink {
-  text-shadow: 0 0 8px rgba(255, 149, 238, 0.4), 0 0 20px rgba(255, 149, 238, 0.15);
+  text-shadow:
+    0 0 10px rgba(255, 121, 198, 0.5),
+    0 0 28px rgba(255, 121, 198, 0.15);
 }
 
 .border-glow-neon {
-  box-shadow: 0 0 0 1px rgba(3, 231, 139, 0.15), 0 0 15px rgba(3, 231, 139, 0.05);
+  box-shadow:
+    0 0 0 1px rgba(3, 231, 139, 0.18),
+    0 0 18px rgba(3, 231, 139, 0.06);
 }
 
 /* ─── Recharts ──────────────────────────────── */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: #1a1a1a !important;
+  stroke: #1b2d4a !important;
 }
 
 .recharts-text {
-  fill: #444 !important;
+  fill: #354d6a !important;
   font-family: var(--font-mono) !important;
   font-size: 9px !important;
 }
 
 /* ─── Selection ─────────────────────────────── */
 ::selection {
-  background: rgba(3, 231, 139, 0.2);
+  background: rgba(3, 231, 139, 0.18);
   color: #03E78B;
 }

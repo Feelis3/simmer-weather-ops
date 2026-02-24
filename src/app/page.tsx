@@ -46,11 +46,12 @@ export default function Dashboard() {
   });
   const [logBot, setLogBot] = useState<BotId>("weather");
   const [paused, setPaused] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
   const btcTimerRef = useRef<ReturnType<typeof setInterval>>(null);
   const router = useRouter();
 
-  // Progressive fetch: fast endpoints first, then slow ones
   const fetchFast = useCallback(async () => {
     const [btcRes, cronsRes, marketsRes] = await Promise.allSettled([
       fetch("/api/btc").then((r) => r.json()),
@@ -87,11 +88,11 @@ export default function Dashboard() {
       logs,
       error: null,
     }));
+    setLastUpdated(new Date());
   }, []);
 
   const fetchAll = useCallback(async () => {
     try {
-      // Fire fast endpoints immediately, don't wait for slow ones
       fetchFast();
       await fetchSlow();
     } catch (e) {
@@ -100,7 +101,6 @@ export default function Dashboard() {
   }, [fetchFast, fetchSlow]);
 
   useEffect(() => {
-    // Progressive: fast data loads instantly, slow follows
     fetchFast();
     fetchSlow();
     timerRef.current = setInterval(fetchAll, 30000);
@@ -116,6 +116,13 @@ export default function Dashboard() {
   }, [fetchFast, fetchSlow, fetchAll]);
 
   // Actions
+  const handleManualRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    await fetchAll();
+    setIsRefreshing(false);
+  };
+
   const handleToggle = async (bot: BotId, enabled: boolean) => {
     await fetch(`/api/toggle/${bot}`, {
       method: "POST",
@@ -161,14 +168,17 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-bg text-text-primary font-sans">
       {/* Header */}
-      <header className="border-b border-border bg-bg-card/80 backdrop-blur-md sticky top-0 z-50">
+      <header className="border-b border-border sticky top-0 z-50" style={{ background: "rgba(11, 18, 41, 0.88)", backdropFilter: "blur(16px)" }}>
         <div className="max-w-[1440px] mx-auto px-5 py-3">
           <div className="flex items-center justify-between gap-4">
             {/* Brand */}
             <div className="flex items-center gap-2.5 shrink-0">
-              <span className="text-neon font-bold text-sm tracking-wider glow-neon">CLAWDBOT</span>
-              <span className="text-text-muted text-xs">//</span>
-              <span className="text-pink text-[0.6rem] font-semibold tracking-wider">OPS</span>
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: "rgba(3,231,139,0.12)" }}>
+                <span className="text-neon text-[0.6rem] font-black">C</span>
+              </div>
+              <span className="text-text-primary font-bold text-sm tracking-wider">CLAWDBOT</span>
+              <span className="text-text-muted text-xs">/</span>
+              <span className="text-pink text-[0.6rem] font-semibold tracking-widest">OPS</span>
             </div>
 
             {/* Stats bar */}
@@ -181,7 +191,7 @@ export default function Dashboard() {
                 color={polyPnl >= 0 ? "text-neon" : "text-red"}
               />
               <Sep />
-              <HeaderStat label="Exposure" value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`} color="text-amber" />
+              <HeaderStat label="Exp" value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`} color="text-amber" />
               <Sep />
               <BtcWidget data={state.btc} />
               <Sep />
@@ -189,7 +199,33 @@ export default function Dashboard() {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Manual refresh */}
+              <button
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                title={lastUpdated ? `Última actualización: ${lastUpdated.toLocaleTimeString()}` : "Actualizar"}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-text-muted hover:text-neon hover:bg-neon/8 transition-all disabled:opacity-40"
+              >
+                <svg
+                  width="13" height="13" viewBox="0 0 13 13" fill="none"
+                  className={isRefreshing ? "animate-spin-refresh" : ""}
+                >
+                  <path d="M12 6.5A5.5 5.5 0 1 1 6.5 1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  <path d="M12 1v5.5H6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {lastUpdated && !isRefreshing && (
+                  <span className="text-[0.5rem] tabular-nums hidden sm:block">
+                    {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                  </span>
+                )}
+                {isRefreshing && (
+                  <span className="text-[0.5rem] text-neon hidden sm:block">sync…</span>
+                )}
+              </button>
+
+              <div className="w-px h-4 bg-border" />
+
               <button
                 onClick={handlePause}
                 className={`pill px-3 py-1 text-[0.6rem] font-semibold transition-all ${
@@ -214,9 +250,8 @@ export default function Dashboard() {
 
       {/* Main */}
       <main className="max-w-[1440px] mx-auto px-5 py-5 space-y-5">
-        {/* Error */}
         {state.error && (
-          <div className="card p-4 border-red/20">
+          <div className="card p-4" style={{ borderColor: "rgba(255,68,102,0.25)" }}>
             <span className="text-red text-xs font-semibold">VPS Error: </span>
             <span className="text-red/60 text-xs">{state.error}</span>
           </div>
@@ -224,7 +259,6 @@ export default function Dashboard() {
 
         {/* Row 1: Bot cards + Chart */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Bot cards - 2x2 grid */}
           <div className="lg:col-span-2 grid grid-cols-2 gap-4">
             {hasData ? (
               BOT_IDS.map((bot) => (
@@ -247,7 +281,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* P&L Chart + Stats */}
           <div className="space-y-4">
             {state.trades ? (
               <PnlChart trades={allTrades} currentPnl={polyPnl} />
@@ -271,7 +304,7 @@ export default function Dashboard() {
               <MiniStat
                 label="Win Rate"
                 value={account?.win_rate != null ? `${(account.win_rate * 100).toFixed(0)}%` : "---"}
-                sub={account?.total_pnl_percent != null ? `${account.total_pnl_percent >= 0 ? "+" : ""}${account.total_pnl_percent.toFixed(1)}% total` : undefined}
+                sub={account?.total_pnl_percent != null ? `${account.total_pnl_percent >= 0 ? "+" : ""}${account.total_pnl_percent.toFixed(1)}%` : undefined}
                 color="text-neon"
               />
             </div>
@@ -294,7 +327,6 @@ export default function Dashboard() {
 
         {/* Row 3: Logs + Markets */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Logs */}
           <div className="space-y-3">
             <div className="flex items-center gap-1 p-1 rounded-xl bg-bg-card border border-border">
               {BOT_IDS.map((bot) => (
@@ -304,7 +336,7 @@ export default function Dashboard() {
                   className={`px-3 py-1.5 rounded-lg text-[0.6rem] font-semibold tracking-wide transition-all flex-1 ${
                     logBot === bot ? "" : "text-text-muted hover:text-text-secondary"
                   }`}
-                  style={logBot === bot ? { backgroundColor: BOTS[bot].color + "15", color: BOTS[bot].color } : undefined}
+                  style={logBot === bot ? { backgroundColor: BOTS[bot].color + "18", color: BOTS[bot].color } : undefined}
                 >
                   {BOTS[bot].emoji} {BOTS[bot].label}
                 </button>
@@ -313,7 +345,6 @@ export default function Dashboard() {
             <LogsTerminal botId={logBot} log={state.logs[logBot] ?? ""} />
           </div>
 
-          {/* Markets */}
           {state.markets ? (
             <MarketsTable markets={markets} />
           ) : (
@@ -326,7 +357,7 @@ export default function Dashboard() {
       <footer className="border-t border-border mt-8 py-3">
         <div className="max-w-[1440px] mx-auto px-5 flex items-center justify-between">
           <span className="text-[0.55rem] text-text-muted">
-            VPS 194.163.160.76:8420 &middot; 30s refresh
+            194.163.160.76:8420 &middot; auto-refresh 30s
           </span>
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-neon/40 animate-pulse-neon" />
