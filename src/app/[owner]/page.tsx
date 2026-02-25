@@ -10,7 +10,6 @@ import LogsTerminal from "@/components/LogsTerminal";
 import MarketsTable from "@/components/MarketsTable";
 import BtcWidget from "@/components/BtcWidget";
 import LeaderboardCard from "@/components/LeaderboardCard";
-import PnlChart from "@/components/PnlChart";
 import { BOTS, BOT_IDS, type BotId } from "@/lib/constants";
 import { OWNERS, OWNER_IDS, type OwnerId } from "@/lib/owners";
 import type {
@@ -174,7 +173,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   const allTrades = state.trades?.trades ?? [];
   const trades: Trade[] = allTrades.filter((t) => t.venue === "polymarket");
   const markets = state.markets?.markets ?? [];
-  const polyPnl = state.status?.account?.polymarket_pnl ?? state.status?.portfolio?.pnl_total ?? 0;
   const hasData = state.btc || state.crons || state.status;
 
   return (
@@ -229,12 +227,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                 label="USDC"
                 value={`$${(portfolio?.balance_usdc ?? 0).toFixed(2)}`}
                 color="text-neon"
-              />
-              <Sep />
-              <HeaderStat
-                label="P&L"
-                value={`${polyPnl >= 0 ? "+" : ""}$${polyPnl.toFixed(2)}`}
-                color={polyPnl >= 0 ? "text-neon" : "text-red"}
               />
               <Sep />
               <HeaderStat label="Exp" value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`} color="text-amber" />
@@ -346,12 +338,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
               </div>
 
               <div className="space-y-4">
-                {state.trades ? (
-                  <PnlChart trades={allTrades} currentPnl={polyPnl} />
-                ) : (
-                  <Skeleton className="h-[230px]" />
-                )}
-
                 <div className="grid grid-cols-3 gap-3">
                   <MiniStat
                     label="Positions"
@@ -368,9 +354,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                   <MiniStat
                     label="Win Rate"
                     value={account?.win_rate != null ? `${(account.win_rate * 100).toFixed(0)}%` : "---"}
-                    sub={account?.total_pnl_percent != null
-                      ? `${account.total_pnl_percent >= 0 ? "+" : ""}${account.total_pnl_percent.toFixed(1)}%`
-                      : undefined}
                     color="text-neon"
                   />
                 </div>

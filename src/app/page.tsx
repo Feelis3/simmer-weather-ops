@@ -90,10 +90,6 @@ export default function Overview() {
     (sum, id) => sum + (allStatus[id].status?.portfolio?.balance_usdc ?? 0),
     0
   );
-  const totalPnl = onlineBots.reduce((sum, id) => {
-    const s = allStatus[id].status;
-    return sum + (s?.account?.polymarket_pnl ?? s?.portfolio?.pnl_total ?? 0);
-  }, 0);
   const totalPositions = onlineBots.reduce((sum, id) => {
     const positions = allStatus[id].status?.positions?.positions ?? [];
     return sum + positions.filter((p) => p.venue === "polymarket").length;
@@ -121,12 +117,6 @@ export default function Overview() {
               label="TOTAL USDC"
               value={onlineBots.length ? `$${totalBalance.toFixed(2)}` : "---"}
               color="text-neon"
-            />
-            <Sep />
-            <HeaderStat
-              label="COMBINED P&L"
-              value={onlineBots.length ? `${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(2)}` : "---"}
-              color={totalPnl >= 0 ? "text-neon" : "text-red"}
             />
             <Sep />
             <HeaderStat label="POSITIONS" value={onlineBots.length ? String(totalPositions) : "---"} color="text-purple" />
@@ -168,17 +158,12 @@ export default function Overview() {
 
       <main className="max-w-[1440px] mx-auto px-5 py-6 space-y-6">
         {/* Summary cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <SummaryCard
             label="Combined Balance"
             value={`$${totalBalance.toFixed(2)}`}
             color="#03E78B"
             sub={`${onlineBots.length}/${OWNER_IDS.length} bots online`}
-          />
-          <SummaryCard
-            label="Combined P&L"
-            value={`${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(2)}`}
-            color={totalPnl >= 0 ? "#03E78B" : "#ff4466"}
           />
           <SummaryCard label="Open Positions" value={String(totalPositions)} color="#a78bfa" />
           <SummaryCard

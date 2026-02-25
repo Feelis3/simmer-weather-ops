@@ -16,7 +16,6 @@ export default function OwnerCard({ owner, status, error, offline }: Props) {
   const account = status?.account;
   const positions = status?.positions;
   const balance = portfolio?.balance_usdc ?? 0;
-  const pnl = account?.polymarket_pnl ?? portfolio?.pnl_total ?? 0;
   const posCount = positions?.positions?.filter((p) => p.venue === "polymarket").length ?? 0;
   const winRate = account?.win_rate;
   const isOnline = !offline && !error && status != null;
@@ -101,13 +100,8 @@ export default function OwnerCard({ owner, status, error, offline }: Props) {
               </div>
             </div>
 
-            {/* P&L + positions row */}
-            <div className="grid grid-cols-3 gap-3">
-              <Stat
-                label="P&L"
-                value={status ? `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}` : "---"}
-                color={pnl >= 0 ? "#03E78B" : "#ff4466"}
-              />
+            {/* Stats row */}
+            <div className="grid grid-cols-2 gap-3">
               <Stat
                 label="Positions"
                 value={status ? String(posCount) : "---"}
