@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import OwnerCard from "@/components/OwnerCard";
-import BtcWidget from "@/components/BtcWidget";
 import { OWNERS, OWNER_IDS, type OwnerId } from "@/lib/owners";
-import type { StatusResponse, BtcData } from "@/lib/types";
+import type { StatusResponse } from "@/lib/types";
 
 interface OwnerState {
   status: StatusResponse | null;
@@ -21,7 +20,6 @@ export default function Overview() {
   const [allStatus, setAllStatus] = useState<AllStatus>(
     Object.fromEntries(OWNER_IDS.map((id) => [id, DEFAULT_STATE])) as AllStatus
   );
-  const [btc, setBtc] = useState<BtcData | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
@@ -55,17 +53,10 @@ export default function Overview() {
     setLastUpdated(new Date());
   }, []);
 
-  const fetchBtc = useCallback(async () => {
-    try {
-      const data = await fetch("/api/btc").then((r) => r.json());
-      if (!data.error) setBtc(data);
-    } catch {}
-  }, []);
-
   const handleRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
-    await Promise.all([fetchAllStatus(), fetchBtc()]);
+    await fetchAllStatus();
     setIsRefreshing(false);
   };
 
@@ -76,14 +67,9 @@ export default function Overview() {
 
   useEffect(() => {
     fetchAllStatus();
-    fetchBtc();
     const t1 = setInterval(fetchAllStatus, 30000);
-    const t2 = setInterval(fetchBtc, 15000);
-    return () => {
-      clearInterval(t1);
-      clearInterval(t2);
-    };
-  }, [fetchAllStatus, fetchBtc]);
+    return () => clearInterval(t1);
+  }, [fetchAllStatus]);
 
   const onlineBots = OWNER_IDS.filter((id) => allStatus[id].status != null);
   const totalBalance = onlineBots.reduce(
@@ -120,8 +106,6 @@ export default function Overview() {
             />
             <Sep />
             <HeaderStat label="POSITIONS" value={onlineBots.length ? String(totalPositions) : "---"} color="text-purple" />
-            <Sep />
-            <BtcWidget data={btc} />
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">

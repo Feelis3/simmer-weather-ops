@@ -8,7 +8,6 @@ import PositionsTable from "@/components/PositionsTable";
 import TradesTimeline from "@/components/TradesTimeline";
 import LogsTerminal from "@/components/LogsTerminal";
 import MarketsTable from "@/components/MarketsTable";
-import BtcWidget from "@/components/BtcWidget";
 import LeaderboardCard from "@/components/LeaderboardCard";
 import { BOTS, BOT_IDS, type BotId } from "@/lib/constants";
 import { OWNERS, OWNER_IDS, type OwnerId } from "@/lib/owners";
@@ -16,7 +15,6 @@ import type {
   StatusResponse,
   TradesResponse,
   MarketsResponse,
-  BtcData,
   LeaderboardData,
   CronsResponse,
   Position,
@@ -27,7 +25,6 @@ interface DashboardState {
   status: StatusResponse | null;
   trades: TradesResponse | null;
   markets: MarketsResponse | null;
-  btc: BtcData | null;
   leaderboard: LeaderboardData | null;
   crons: CronsResponse | null;
   logs: Record<string, string>;
@@ -48,7 +45,7 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   const prefix = `/api/bots/${ownerId}`;
 
   const [state, setState] = useState<DashboardState>({
-    status: null, trades: null, markets: null, btc: null,
+    status: null, trades: null, markets: null,
     leaderboard: null, crons: null, logs: {}, error: null, offline: false,
   });
   const [logBot, setLogBot] = useState<BotId>("weather");
@@ -56,18 +53,15 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
-  const btcTimerRef = useRef<ReturnType<typeof setInterval>>(null);
   const router = useRouter();
 
   const fetchFast = useCallback(async () => {
-    const [btcRes, cronsRes, marketsRes] = await Promise.allSettled([
-      fetch(`${prefix}/btc`).then((r) => r.json()),
+    const [cronsRes, marketsRes] = await Promise.allSettled([
       fetch(`${prefix}/crons`).then((r) => r.json()),
       fetch(`${prefix}/markets`).then((r) => r.json()),
     ]);
     setState((prev) => ({
       ...prev,
-      btc: btcRes.status === "fulfilled" && !btcRes.value.error ? btcRes.value : prev.btc,
       crons: cronsRes.status === "fulfilled" && !cronsRes.value.error ? cronsRes.value : prev.crons,
       markets: marketsRes.status === "fulfilled" && !marketsRes.value.error ? marketsRes.value : prev.markets,
     }));
@@ -117,15 +111,8 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
     fetchFast();
     fetchSlow();
     timerRef.current = setInterval(fetchAll, 30000);
-    btcTimerRef.current = setInterval(() => {
-      fetch(`${prefix}/btc`)
-        .then((r) => r.json())
-        .then((d) => { if (!d.error) setState((prev) => ({ ...prev, btc: d })); })
-        .catch(() => {});
-    }, 15000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (btcTimerRef.current) clearInterval(btcTimerRef.current);
     };
   }, [fetchFast, fetchSlow, fetchAll, prefix]);
 
@@ -173,7 +160,7 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   const allTrades = state.trades?.trades ?? [];
   const trades: Trade[] = allTrades.filter((t) => t.venue === "polymarket");
   const markets = state.markets?.markets ?? [];
-  const hasData = state.btc || state.crons || state.status;
+  const hasData = state.crons || state.status;
 
   return (
     <div className="min-h-screen bg-bg text-text-primary font-sans">
@@ -230,8 +217,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
               />
               <Sep />
               <HeaderStat label="Exp" value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`} color="text-amber" />
-              <Sep />
-              <BtcWidget data={state.btc} />
               <Sep />
               <LeaderboardCard data={state.leaderboard} />
             </div>

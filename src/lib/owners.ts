@@ -36,7 +36,7 @@ export const OWNERS: Record<OwnerId, OwnerConfig> = {
     cities: ["London", "Seoul", "Toronto", "Paris", "Tokyo", "Sydney"],
     color: "#ff79c6",
     accentDim: "rgba(255,121,198,0.12)",
-    emoji: "🌍",
+    emoji: "🐒",
   },
   jose: {
     id: "jose",
