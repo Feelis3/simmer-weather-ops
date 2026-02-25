@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Nav from "@/components/Nav";
 
 export const metadata: Metadata = {
   title: "CLAWDBOT // OPS",
-  description: "Trading bot dashboard — Weather, BTC, EIA, FRED bots on Polymarket via Simmer",
+  description: "Weather trading dashboard — 4-bot multi-account on Polymarket via Simmer",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +18,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <Nav />
+        {children}
+      </body>
     </html>
   );
 }
