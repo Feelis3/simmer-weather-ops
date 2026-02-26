@@ -161,3 +161,40 @@ body {
   background: rgba(3, 231, 139, 0.18);
   color: #03E78B;
 }
+
+/* ─── Typography utilities (used by bot detail pages) ── */
+.stat-hero {
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.stat-xl {
+  font-size: clamp(1.1rem, 2.5vw, 1.6rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.label-xs {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* ─── Extra animations ──────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes number-up {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-fade-up    { animation: fade-up 0.4s ease-out both; }
+.animate-number     { animation: number-up 0.35s ease-out both; }

@@ -13,12 +13,29 @@ function getApiKey(id: OwnerId): string | null {
   }
 }
 
+function getWallet(id: OwnerId): string | null {
+  switch (id) {
+    case "marcos": return process.env.POLYMARKET_WALLET_MARCOS ?? null;
+    case "jorge":  return process.env.POLYMARKET_WALLET_JORGE  ?? null;
+    case "mario":  return process.env.POLYMARKET_WALLET_MARIO  ?? null;
+    case "jose":   return process.env.POLYMARKET_WALLET_JOSE   ?? null;
+  }
+}
+
+function buildHeaders(id: OwnerId): Record<string, string> {
+  const key    = getApiKey(id)!;
+  const wallet = getWallet(id);
+  const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
+  if (wallet) headers["X-Wallet-Address"] = wallet;
+  return headers;
+}
+
 export async function vpsGet<T>(id: OwnerId, path: string): Promise<T> {
   const key = getApiKey(id);
   if (!key) throw new OfflineError(id);
   const res = await fetch(`${BASE_URL}${path}`, {
     cache: "no-store",
-    headers: { Authorization: `Bearer ${key}` },
+    headers: buildHeaders(id),
   });
   if (!res.ok) throw new Error(`API ${path}: ${res.status}`);
   return res.json() as Promise<T>;
@@ -35,7 +52,7 @@ export async function vpsPost<T>(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
+      ...buildHeaders(id),
     },
     body: JSON.stringify(body),
     cache: "no-store",
