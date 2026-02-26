@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { OWNERS, OWNER_IDS } from "@/lib/owners";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Overview", emoji: "⬡", color: "#00f5a0" },
+  { href: "/", label: "Overview", emoji: "◈" },
   ...OWNER_IDS.map((id) => ({
     href: `/${id}`,
     label: OWNERS[id].name,
@@ -20,64 +20,42 @@ export default function Nav() {
   if (pathname === "/login") return null;
 
   return (
-    <header
-      className="sticky top-0 z-50 border-b border-border"
-      style={{ background: "rgba(2,4,11,0.92)", backdropFilter: "blur(24px)" }}
+    <div
+      className="border-b border-border"
+      style={{ background: "rgba(5,9,26,0.7)", backdropFilter: "blur(12px)" }}
     >
-      <div className="max-w-[1440px] mx-auto px-5 h-12 flex items-center justify-between gap-6">
-
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <div
-            className="w-5 h-5 rounded-md flex items-center justify-center"
-            style={{ background: "rgba(0,245,160,0.08)", border: "1px solid rgba(0,245,160,0.12)" }}
-          >
-            <span style={{ color: "#00f5a0", fontSize: "0.5rem", fontWeight: 900 }}>C</span>
-          </div>
-          <span className="text-text-primary font-bold text-[0.7rem] tracking-[0.18em] hidden sm:block">
-            CLAWDBOT
-          </span>
-        </div>
-
-        {/* Nav tabs — pill group */}
-        <nav
-          className="flex items-center gap-0.5 rounded-xl p-0.5 overflow-x-auto"
-          style={{ background: "rgba(14,18,32,0.8)", border: "1px solid #0e1220" }}
-        >
+      <div className="max-w-[1440px] mx-auto px-5">
+        <div className="flex items-center gap-1 overflow-x-auto">
           {NAV_ITEMS.map((item) => {
             const isActive =
-              item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            const color = item.color;
-
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href);
+            const color = "color" in item ? item.color : "#03E78B";
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.6rem] font-semibold tracking-wide transition-all whitespace-nowrap shrink-0"
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-[0.6rem] font-semibold tracking-wide transition-all whitespace-nowrap border-b-2 ${
+                  isActive
+                    ? "text-text-primary"
+                    : "text-text-muted hover:text-text-secondary border-transparent"
+                }`}
                 style={
                   isActive
-                    ? {
-                        background: color + "18",
-                        color: color,
-                        boxShadow: `inset 0 1px 0 ${color}15`,
-                      }
-                    : {
-                        color: "#4a6080",
-                      }
+                    ? { borderBottomColor: color, color }
+                    : { borderBottomColor: "transparent" }
                 }
-                onMouseEnter={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLAnchorElement).style.color = "#8899bb";
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLAnchorElement).style.color = "#4a6080";
-                }}
               >
-                <span className="text-[0.8rem] leading-none">{item.emoji}</span>
+                <span>{item.emoji}</span>
                 <span>{item.label}</span>
                 {"type" in item && (
                   <span
-                    className="text-[0.4rem] px-1 py-0.5 rounded font-black tracking-widest hidden sm:inline"
-                    style={{ background: color + "15", color: color + "90" }}
+                    className="text-[0.45rem] px-1 py-0.5 rounded font-bold tracking-widest"
+                    style={{
+                      background: color + "18",
+                      color: color + "cc",
+                    }}
                   >
                     {item.type}
                   </span>
@@ -85,11 +63,8 @@ export default function Nav() {
               </Link>
             );
           })}
-        </nav>
-
-        {/* Right slot — empty spacer to balance */}
-        <div className="w-24 shrink-0 hidden sm:block" />
+        </div>
       </div>
-    </header>
+    </div>
   );
 }
