@@ -139,19 +139,16 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   const weatherActive = state.crons?.bots?.weather?.active ?? false;
   const c = ownerConfig.color;
 
+  // Balance: account.balance is the primary source; fallback to portfolio.balance_usdc
+  const balance    = account?.balance ?? portfolio?.balance_usdc ?? 0;
+  const totalPnl   = account?.total_pnl ?? 0;
+  const totalPnlPct = account?.total_pnl_percent ?? 0;
+  const openPnl    = positions.reduce((s, p) => s + p.pnl, 0);
+
   const winLossData = [
     { name: "Wins",   value: account?.win_count  ?? 0, color: "#4ade80" },
     { name: "Losses", value: account?.loss_count ?? 0, color: "#f87171" },
   ];
-
-  const posChartData = positions
-    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
-    .slice(0, 12)
-    .map(p => ({
-      name: p.question.length > 32 ? p.question.slice(0, 32) + "…" : p.question,
-      pnl:  parseFloat(p.pnl.toFixed(2)),
-      fill: p.pnl >= 0 ? "#4ade80" : "#f87171",
-    }));
 
   const tradesByDay = (() => {
     const g: Record<string, { B: number; S: number }> = {};
@@ -168,18 +165,18 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
     }));
   })();
 
-  const totalPnl = positions.reduce((s, p) => s + p.pnl, 0);
-
   return (
     <div className="min-h-screen bg-bg text-text-primary">
 
       {/* ── Sub-header ──────────────────────────────────────────────────────── */}
       <div className="border-b border-border" style={{ background: "rgba(5,9,26,0.92)" }}>
-        <div className="max-w-[1440px] mx-auto px-5 h-10 flex items-center justify-between gap-6">
+        <div className="max-w-[1440px] mx-auto px-5 h-11 flex items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <span className="text-xl leading-none">{ownerConfig.emoji}</span>
             <span className="text-sm font-bold text-text-primary">{ownerConfig.name}</span>
             <span className="label-xs" style={{ color: c + "70" }}>{ownerConfig.type}</span>
+
+            {/* Status */}
             {state.offline ? (
               <span className="pill text-[0.45rem]" style={{ background: "#1b2d4a", color: "#92adc9" }}>PENDING</span>
             ) : state.error ? (
@@ -190,13 +187,17 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                 <span className="text-[0.45rem] font-black tracking-widest" style={{ color: c }}>LIVE</span>
               </div>
             ) : null}
+
+            {/* Quick stats */}
             <div className="hidden md:flex items-center gap-5 ml-2 pl-2 border-l border-border">
-              <StatChip label="Balance"   value={`$${(portfolio?.balance_usdc ?? 0).toFixed(2)}`} color={c} />
+              <StatChip label="Balance"   value={`$${balance.toFixed(2)}`}                         color={c} />
               <StatChip label="Exposure"  value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`} color="#f59e0b" />
-              <StatChip label="Positions" value={String(positions.length)} color="#a78bfa" />
+              <StatChip label="Positions" value={String(positions.length)}                          color="#a78bfa" />
               <LeaderboardCard data={state.leaderboard} />
             </div>
           </div>
+
+          {/* Controls */}
           <div className="flex items-center gap-2 shrink-0">
             <button onClick={handleRefresh} disabled={isRefreshing}
               className="flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-30">
@@ -231,9 +232,9 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
 
       <main className="max-w-[1440px] mx-auto px-5 py-6 space-y-5">
 
-        {/* Offline / Error */}
+        {/* ── Offline / Error states ───────────────────────────────────────── */}
         {state.offline && (
-          <div className="rounded-2xl p-10 text-center"
+          <div className="rounded-2xl p-12 text-center"
             style={{ background: "#0b1229", border: "1px solid #1b2d4a" }}>
             <div className="text-4xl mb-4">⏳</div>
             <p className="text-base font-bold mb-1">{ownerConfig.name}&apos;s bot is not configured yet</p>
@@ -252,109 +253,211 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
 
         {!state.offline && (
           <>
-            {/* ── Row 1: 4 stat cards ─────────────────────────────────────── */}
+            {/* ── Row 1: Four key stats ────────────────────────────────────── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <BigStat label="Balance"        value={`$${(portfolio?.balance_usdc ?? 0).toFixed(2)}`}           color={c}        loading={!state.status} />
-              <BigStat label="Exposure"       value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`}          color="#f59e0b"  loading={!state.status} />
-              <BigStat label="Open Positions" value={String(positions.length)}                                    color="#a78bfa"  loading={!state.status} />
+              <BigStat
+                label="Balance"
+                value={`$${balance.toFixed(2)}`}
+                sub={portfolio?.balance_usdc != null && portfolio.balance_usdc !== balance
+                  ? `USDC: $${portfolio.balance_usdc.toFixed(2)}`
+                  : undefined}
+                color={c}
+                loading={!state.status}
+              />
+              <BigStat
+                label="Total P&L"
+                value={`${totalPnl >= 0 ? "+" : ""}$${Math.abs(totalPnl).toFixed(2)}`}
+                sub={`${totalPnlPct >= 0 ? "+" : ""}${totalPnlPct.toFixed(1)}% all-time`}
+                color={totalPnl >= 0 ? "#4ade80" : "#f87171"}
+                loading={!state.status}
+              />
+              <BigStat
+                label="Open Positions"
+                value={String(positions.length)}
+                sub={positions.length > 0
+                  ? `Open P&L: ${openPnl >= 0 ? "+" : ""}$${openPnl.toFixed(2)}`
+                  : "No open positions"}
+                color="#a78bfa"
+                loading={!state.status}
+              />
               <BigStat
                 label="Win Rate"
                 value={account?.win_rate != null ? `${(account.win_rate * 100).toFixed(0)}%` : "—"}
-                sub={account ? `${account.win_count ?? 0}W · ${account.loss_count ?? 0}L` : undefined}
-                color={c} loading={!state.status}
+                sub={account
+                  ? `${account.win_count ?? 0}W · ${account.loss_count ?? 0}L · ${account.trades_count ?? 0} trades`
+                  : undefined}
+                color={c}
+                loading={!state.status}
               />
             </div>
 
-            {/* ── Row 2: Weather Bot | Win/Loss | Trade Activity ───────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-              {/* Weather bot card */}
-              <div className="card p-5 flex flex-col gap-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-xl flex items-center justify-center text-3xl shrink-0"
-                      style={{ background: BOTS.weather.color + "15", border: `1px solid ${BOTS.weather.color}25` }}>
-                      {BOTS.weather.emoji}
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold" style={{ color: BOTS.weather.color }}>Weather Bot</div>
-                      <div className="text-[0.55rem] text-text-secondary mt-0.5">{BOTS.weather.desc}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1 shrink-0">
-                    <div className={`w-2 h-2 rounded-full ${weatherActive ? "animate-pulse-neon" : ""}`}
-                      style={{ background: weatherActive ? "#4ade80" : "#f87171" }} />
-                    <span className="text-[0.5rem] font-black tracking-widest"
-                      style={{ color: weatherActive ? "#4ade80" : "#f87171" }}>
-                      {weatherActive ? "LIVE" : "OFF"}
+            {/* ── Row 2: Positions table ───────────────────────────────────── */}
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <h3 className="text-sm font-bold text-text-primary">Open Positions</h3>
+                  {positions.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[0.5rem] font-bold"
+                      style={{ background: "#a78bfa20", color: "#a78bfa" }}>
+                      {positions.length}
+                    </span>
+                  )}
+                </div>
+                {positions.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="label-xs">Open P&L</span>
+                    <span className="text-sm font-bold tabular-nums"
+                      style={{ color: openPnl >= 0 ? "#4ade80" : "#f87171" }}>
+                      {openPnl >= 0 ? "+" : ""}${openPnl.toFixed(2)}
                     </span>
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {ownerConfig.cities.map(city => (
-                    <span key={city} className="text-[0.55rem] px-2.5 py-1 rounded-lg font-mono font-semibold"
-                      style={{ background: c + "12", color: c + "aa", border: `1px solid ${c}20` }}>
-                      {city}
-                    </span>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border">
-                  <div>
-                    <div className="label-xs mb-1">Total P&L</div>
-                    <div className="text-lg font-bold tabular-nums"
-                      style={{ color: (account?.total_pnl ?? 0) >= 0 ? "#4ade80" : "#f87171" }}>
-                      {account != null
-                        ? `${account.total_pnl >= 0 ? "+" : ""}$${account.total_pnl.toFixed(2)}`
-                        : "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="label-xs mb-1">Total Trades</div>
-                    <div className="text-lg font-bold tabular-nums" style={{ color: "#22d3ee" }}>
-                      {account?.trades_count ?? "—"}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-auto">
-                  <button onClick={() => handleToggle(!weatherActive)}
-                    className="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all"
-                    style={weatherActive
-                      ? { background: "rgba(248,113,113,0.08)", color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }
-                      : { background: "rgba(74,222,128,0.08)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.2)" }}>
-                    {weatherActive ? "⏹ Disable" : "▶ Enable"}
-                  </button>
-                  <button onClick={handleRun}
-                    className="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all"
-                    style={{ background: "rgba(34,211,238,0.08)", color: "#22d3ee", border: "1px solid rgba(34,211,238,0.2)" }}>
-                    ⚡ Run Now
-                  </button>
-                </div>
+                )}
               </div>
+
+              {positions.length === 0 ? (
+                <div className="h-24 flex items-center justify-center">
+                  {state.status
+                    ? <span className="text-xs text-text-muted">No open positions</span>
+                    : <div className="skeleton h-4 w-40 rounded" />}
+                </div>
+              ) : (
+                <div className="overflow-x-auto -mx-1 px-1">
+                  <table className="w-full min-w-[700px]">
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #1b2d4a" }}>
+                        {[
+                          { label: "Market",       w: "w-auto"  },
+                          { label: "Side",         w: "w-14"    },
+                          { label: "Price",        w: "w-16"    },
+                          { label: "Shares",       w: "w-16"    },
+                          { label: "Cost Basis",   w: "w-20"    },
+                          { label: "Curr. Value",  w: "w-20"    },
+                          { label: "P&L",          w: "w-20"    },
+                          { label: "Expires",      w: "w-20"    },
+                        ].map(h => (
+                          <th key={h.label}
+                            className={`pb-2.5 text-left pr-3 ${h.w}`}
+                            style={{ color: "#6b80a0", fontSize: "0.5rem", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>
+                            {h.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {positions
+                        .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
+                        .map((pos, i) => {
+                          const isYes  = (pos.shares_yes ?? 0) > 0;
+                          const shares = isYes ? pos.shares_yes : pos.shares_no;
+                          const pnlPos = pos.pnl >= 0;
+                          const expiresStr = pos.resolves_at
+                            ? new Date(pos.resolves_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                            : "—";
+
+                          return (
+                            <tr key={pos.market_id ?? i}
+                              className="transition-colors"
+                              style={{ borderBottom: "1px solid #1b2d4a1a" }}
+                              onMouseEnter={e => (e.currentTarget.style.background = "#0f1d35")}
+                              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+
+                              {/* Market question */}
+                              <td className="py-3 pr-4">
+                                <span className="text-xs font-medium leading-snug text-text-primary"
+                                  title={pos.question}
+                                  style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                                  {pos.question}
+                                </span>
+                                {pos.redeemable && (
+                                  <span className="inline-block mt-1 text-[0.45rem] px-1.5 py-0.5 rounded font-bold"
+                                    style={{ background: "rgba(3,231,139,0.1)", color: "#03E78B" }}>
+                                    REDEEMABLE
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Side */}
+                              <td className="py-3 pr-3">
+                                <span className="px-2 py-0.5 rounded text-[0.5rem] font-bold tabular-nums"
+                                  style={isYes
+                                    ? { background: "rgba(74,222,128,0.12)", color: "#4ade80" }
+                                    : { background: "rgba(248,113,113,0.12)", color: "#f87171" }}>
+                                  {isYes ? "YES" : "NO"}
+                                </span>
+                              </td>
+
+                              {/* Current price */}
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs font-semibold"
+                                style={{ color: "#22d3ee" }}>
+                                {(pos.current_price * 100).toFixed(0)}¢
+                              </td>
+
+                              {/* Shares */}
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs"
+                                style={{ color: "#92adc9" }}>
+                                {(shares ?? 0).toFixed(0)}
+                              </td>
+
+                              {/* Cost basis */}
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs"
+                                style={{ color: "#6b80a0" }}>
+                                ${pos.cost_basis.toFixed(2)}
+                              </td>
+
+                              {/* Current value */}
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs font-semibold"
+                                style={{ color: "#dde8ff" }}>
+                                ${pos.current_value.toFixed(2)}
+                              </td>
+
+                              {/* P&L */}
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs font-bold"
+                                style={{ color: pnlPos ? "#4ade80" : "#f87171" }}>
+                                {pnlPos ? "+" : ""}${pos.pnl.toFixed(2)}
+                              </td>
+
+                              {/* Expires */}
+                              <td className="py-3 text-[0.55rem] tabular-nums"
+                                style={{ color: "#6b80a0" }}>
+                                {expiresStr}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* ── Row 3: Trade Results | Trade Activity | Weather Bot ──────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
               {/* Win/Loss donut */}
               <div className="card p-5 flex flex-col">
                 <h3 className="text-xs font-semibold tracking-wide text-text-secondary mb-3">Trade Results</h3>
                 {(account?.win_count ?? 0) + (account?.loss_count ?? 0) > 0 ? (
                   <>
-                    <ResponsiveContainer width="100%" height={165}>
+                    <ResponsiveContainer width="100%" height={148}>
                       <PieChart>
                         <Pie data={winLossData} cx="50%" cy="50%"
-                          innerRadius={48} outerRadius={72} paddingAngle={3} dataKey="value">
+                          innerRadius={42} outerRadius={64} paddingAngle={3} dataKey="value">
                           {winLossData.map((e, i) => <Cell key={i} fill={e.color} opacity={0.85} />)}
                         </Pie>
-                        <Tooltip contentStyle={{ background: "#0b1229", border: "1px solid #1b2d4a", borderRadius: 8, fontSize: 11 }}
+                        <Tooltip
+                          contentStyle={{ background: "#0b1229", border: "1px solid #1b2d4a", borderRadius: 8, fontSize: 11 }}
                           labelStyle={{ color: "#92adc9" }} itemStyle={{ color: "#f1f5f9" }} />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="flex justify-center gap-8 mt-3">
+                    <div className="flex justify-center gap-6 mt-2">
                       {winLossData.map(d => (
                         <div key={d.name} className="text-center">
-                          <div className="text-xl font-bold tabular-nums" style={{ color: d.color }}>{d.value}</div>
+                          <div className="text-lg font-bold tabular-nums" style={{ color: d.color }}>{d.value}</div>
                           <div className="label-xs mt-0.5">{d.name}</div>
                         </div>
                       ))}
                       <div className="text-center">
-                        <div className="text-xl font-bold tabular-nums" style={{ color: c }}>
+                        <div className="text-lg font-bold tabular-nums" style={{ color: c }}>
                           {account?.win_rate != null ? `${(account.win_rate * 100).toFixed(0)}%` : "—"}
                         </div>
                         <div className="label-xs mt-0.5">Win Rate</div>
@@ -372,13 +475,14 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                   Trade Activity · last 10 days
                 </h3>
                 {tradesByDay.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={195}>
+                  <ResponsiveContainer width="100%" height={175}>
                     <BarChart data={tradesByDay} barSize={9} barCategoryGap="30%">
                       <CartesianGrid strokeDasharray="3 3" stroke="#1b2d4a" vertical={false} />
                       <XAxis dataKey="date" tick={{ fill: "#6b80a0", fontSize: 9 }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fill: "#6b80a0", fontSize: 9 }} axisLine={false} tickLine={false}
-                        width={34} tickFormatter={v => `$${v}`} />
-                      <Tooltip contentStyle={{ background: "#0b1229", border: "1px solid #1b2d4a", borderRadius: 8, fontSize: 11 }}
+                        width={34} tickFormatter={(v: number) => `$${v}`} />
+                      <Tooltip
+                        contentStyle={{ background: "#0b1229", border: "1px solid #1b2d4a", borderRadius: 8, fontSize: 11 }}
                         labelStyle={{ color: "#92adc9" }} itemStyle={{ color: "#f1f5f9" }} />
                       <Bar dataKey="Buys"  fill="#f87171" opacity={0.8} radius={[3, 3, 0, 0]} />
                       <Bar dataKey="Sells" fill="#4ade80" opacity={0.8} radius={[3, 3, 0, 0]} />
@@ -388,48 +492,81 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                   <div className="flex-1 flex items-center justify-center text-xs text-text-muted">No trade history</div>
                 )}
               </div>
-            </div>
 
-            {/* ── Row 3: Positions P&L bar | World map ────────────────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-              {/* Horizontal P&L bar chart */}
-              <div className="card p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-semibold tracking-wide text-text-secondary">Position P&L Breakdown</h3>
-                  {positions.length > 0 && (
-                    <span className="text-sm font-bold tabular-nums"
-                      style={{ color: totalPnl >= 0 ? "#4ade80" : "#f87171" }}>
-                      {totalPnl >= 0 ? "+" : ""}${totalPnl.toFixed(2)}
+              {/* Weather bot controls */}
+              <div className="card p-5 flex flex-col gap-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0"
+                      style={{ background: BOTS.weather.color + "15", border: `1px solid ${BOTS.weather.color}25` }}>
+                      {BOTS.weather.emoji}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold" style={{ color: BOTS.weather.color }}>Weather Bot</div>
+                      <div className="text-[0.55rem] text-text-secondary mt-0.5">{BOTS.weather.desc}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5 shrink-0">
+                    <div className={`w-2 h-2 rounded-full ${weatherActive ? "animate-pulse-neon" : ""}`}
+                      style={{ background: weatherActive ? "#4ade80" : "#f87171" }} />
+                    <span className="text-[0.5rem] font-black tracking-widest"
+                      style={{ color: weatherActive ? "#4ade80" : "#f87171" }}>
+                      {weatherActive ? "LIVE" : "OFF"}
                     </span>
-                  )}
+                  </div>
                 </div>
-                {posChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={Math.max(180, posChartData.length * 30)}>
-                    <BarChart layout="vertical" data={posChartData} barSize={11}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1b2d4a" horizontal={false} />
-                      <XAxis type="number" tick={{ fill: "#6b80a0", fontSize: 9 }} axisLine={false}
-                        tickLine={false} tickFormatter={v => `$${v}`} />
-                      <YAxis type="category" dataKey="name" tick={{ fill: "#92adc9", fontSize: 9 }}
-                        axisLine={false} tickLine={false} width={135} />
-                      <Tooltip contentStyle={{ background: "#0b1229", border: "1px solid #1b2d4a", borderRadius: 8, fontSize: 11 }}
-                        formatter={(v: number | undefined) => [`$${v ?? 0}`, "P&L"]}
-                        labelStyle={{ color: "#92adc9" }} itemStyle={{ color: "#f1f5f9" }} />
-                      <Bar dataKey="pnl" radius={[0, 4, 4, 0]}>
-                        {posChartData.map((e, i) => <Cell key={i} fill={e.fill} opacity={0.85} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-44 flex items-center justify-center text-xs text-text-muted">No open positions</div>
-                )}
-              </div>
 
-              {/* World map */}
-              <CityMap cities={ownerConfig.cities} positions={positions} color={c} isOnline={!!state.status} />
+                {/* City chips */}
+                <div className="flex flex-wrap gap-1.5">
+                  {ownerConfig.cities.map(city => (
+                    <span key={city} className="text-[0.5rem] px-2 py-0.5 rounded font-mono font-semibold"
+                      style={{ background: c + "10", color: c + "90", border: `1px solid ${c}15` }}>
+                      {city}
+                    </span>
+                  ))}
+                </div>
+
+                {/* P&L summary */}
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border">
+                  <div>
+                    <div className="label-xs mb-1">Total P&L</div>
+                    <div className="text-lg font-bold tabular-nums"
+                      style={{ color: (account?.total_pnl ?? 0) >= 0 ? "#4ade80" : "#f87171" }}>
+                      {account != null
+                        ? `${account.total_pnl >= 0 ? "+" : ""}$${account.total_pnl.toFixed(2)}`
+                        : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="label-xs mb-1">Total Trades</div>
+                    <div className="text-lg font-bold tabular-nums" style={{ color: "#22d3ee" }}>
+                      {account?.trades_count ?? "—"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="mt-auto grid grid-cols-2 gap-2">
+                  <button onClick={() => handleToggle(!weatherActive)}
+                    className="py-2 rounded-lg text-[0.6rem] font-bold transition-all"
+                    style={weatherActive
+                      ? { background: "rgba(248,113,113,0.08)", color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }
+                      : { background: "rgba(74,222,128,0.08)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.2)" }}>
+                    {weatherActive ? "⏹ Disable" : "▶ Enable"}
+                  </button>
+                  <button onClick={handleRun}
+                    className="py-2 rounded-lg text-[0.6rem] font-bold transition-all"
+                    style={{ background: "rgba(34,211,238,0.08)", color: "#22d3ee", border: "1px solid rgba(34,211,238,0.2)" }}>
+                    ⚡ Run Now
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* ── Row 4: Trades timeline ──────────────────────────────────── */}
+            {/* ── Row 4: World map ─────────────────────────────────────────── */}
+            <CityMap cities={ownerConfig.cities} positions={positions} color={c} isOnline={!!state.status} />
+
+            {/* ── Row 5: Trades timeline ───────────────────────────────────── */}
             {trades.length > 0 && <TradesTimeline trades={trades} />}
           </>
         )}
@@ -467,10 +604,16 @@ function CityMap({ cities, positions, color, isOnline }: {
     <div className="card p-5 overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xs font-semibold tracking-wide text-text-secondary">Coverage Zones</h3>
-        <div className="flex items-center gap-3 text-[0.55rem] text-text-secondary">
-          <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#4ade80" }} />Profit</span>
-          <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#f87171" }} />Loss</span>
-          <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: color }} />Active</span>
+        <div className="flex items-center gap-4 text-[0.55rem] text-text-secondary">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#4ade80" }} />Profit
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#f87171" }} />Loss
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: color }} />Active
+          </span>
         </div>
       </div>
 
