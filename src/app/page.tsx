@@ -78,7 +78,8 @@ export default function Overview() {
   );
   const totalPositions = onlineBots.reduce((sum, id) => {
     const positions = allStatus[id].status?.positions?.positions ?? [];
-    return sum + positions.filter((p) => p.venue === "polymarket").length;
+    // Active only: polymarket + current_value > 0.01 (excludes resolved)
+    return sum + positions.filter((p) => p.venue === "polymarket" && p.current_value > 0.01).length;
   }, 0);
 
   return (

@@ -132,18 +132,18 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   // ── Derived data ────────────────────────────────────────────────────────────
   const portfolio = state.status?.portfolio;
   const account   = state.status?.account;
+  // Active positions: polymarket only, current_value > 0.01 (filters out resolved)
   const positions: Position[] = (state.status?.positions?.positions ?? [])
-    .filter(p => p.venue === "polymarket");
+    .filter(p => p.venue === "polymarket" && p.current_value > 0.01);
   const trades: Trade[] = (state.trades?.trades ?? [])
     .filter(t => t.venue === "polymarket");
   const weatherActive = state.crons?.bots?.weather?.active ?? false;
   const c = ownerConfig.color;
 
-  // Balance: account.balance is the primary source; fallback to portfolio.balance_usdc
-  const balance    = account?.balance ?? portfolio?.balance_usdc ?? 0;
-  const totalPnl   = account?.total_pnl ?? 0;
-  const totalPnlPct = account?.total_pnl_percent ?? 0;
-  const openPnl    = positions.reduce((s, p) => s + p.pnl, 0);
+  // Balance: use portfolio.balance_usdc (the USDC wallet balance)
+  const balance  = portfolio?.balance_usdc ?? 0;
+  const exposure = portfolio?.total_exposure ?? 0;
+  const openPnl  = positions.reduce((s, p) => s + p.pnl, 0);
 
   const winLossData = [
     { name: "Wins",   value: account?.win_count  ?? 0, color: "#4ade80" },
@@ -190,9 +190,9 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
 
             {/* Quick stats */}
             <div className="hidden md:flex items-center gap-5 ml-2 pl-2 border-l border-border">
-              <StatChip label="Balance"   value={`$${balance.toFixed(2)}`}                         color={c} />
-              <StatChip label="Exposure"  value={`$${(portfolio?.total_exposure ?? 0).toFixed(2)}`} color="#f59e0b" />
-              <StatChip label="Positions" value={String(positions.length)}                          color="#a78bfa" />
+              <StatChip label="Balance"   value={`$${balance.toFixed(2)}`}        color={c} />
+              <StatChip label="Exposure"  value={`$${exposure.toFixed(2)}`}        color="#f59e0b" />
+              <StatChip label="Positions" value={String(positions.length)}         color="#a78bfa" />
               <LeaderboardCard data={state.leaderboard} />
             </div>
           </div>
@@ -258,17 +258,15 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
               <BigStat
                 label="Balance"
                 value={`$${balance.toFixed(2)}`}
-                sub={portfolio?.balance_usdc != null && portfolio.balance_usdc !== balance
-                  ? `USDC: $${portfolio.balance_usdc.toFixed(2)}`
-                  : undefined}
+                sub="USDC wallet"
                 color={c}
                 loading={!state.status}
               />
               <BigStat
-                label="Total P&L"
-                value={`${totalPnl >= 0 ? "+" : ""}$${Math.abs(totalPnl).toFixed(2)}`}
-                sub={`${totalPnlPct >= 0 ? "+" : ""}${totalPnlPct.toFixed(1)}% all-time`}
-                color={totalPnl >= 0 ? "#4ade80" : "#f87171"}
+                label="Exposure"
+                value={`$${exposure.toFixed(2)}`}
+                sub="at risk in markets"
+                color="#f59e0b"
                 loading={!state.status}
               />
               <BigStat
@@ -281,10 +279,10 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                 loading={!state.status}
               />
               <BigStat
-                label="Win Rate"
-                value={account?.win_rate != null ? `${(account.win_rate * 100).toFixed(0)}%` : "—"}
+                label="Total Trades"
+                value={account?.trades_count != null ? String(account.trades_count) : "—"}
                 sub={account
-                  ? `${account.win_count ?? 0}W · ${account.loss_count ?? 0}L · ${account.trades_count ?? 0} trades`
+                  ? `${account.win_count ?? 0} wins · ${account.loss_count ?? 0} losses`
                   : undefined}
                 color={c}
                 loading={!state.status}
@@ -449,7 +447,7 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                           labelStyle={{ color: "#92adc9" }} itemStyle={{ color: "#f1f5f9" }} />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="flex justify-center gap-6 mt-2">
+                    <div className="flex justify-center gap-8 mt-2">
                       {winLossData.map(d => (
                         <div key={d.name} className="text-center">
                           <div className="text-lg font-bold tabular-nums" style={{ color: d.color }}>{d.value}</div>
@@ -457,10 +455,10 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                         </div>
                       ))}
                       <div className="text-center">
-                        <div className="text-lg font-bold tabular-nums" style={{ color: c }}>
-                          {account?.win_rate != null ? `${(account.win_rate * 100).toFixed(0)}%` : "—"}
+                        <div className="text-lg font-bold tabular-nums" style={{ color: "#22d3ee" }}>
+                          {account?.trades_count ?? "—"}
                         </div>
-                        <div className="label-xs mt-0.5">Win Rate</div>
+                        <div className="label-xs mt-0.5">Trades</div>
                       </div>
                     </div>
                   </>
@@ -526,14 +524,14 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                   ))}
                 </div>
 
-                {/* P&L summary */}
+                {/* Trades summary */}
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border">
                   <div>
-                    <div className="label-xs mb-1">Total P&L</div>
+                    <div className="label-xs mb-1">Open P&L</div>
                     <div className="text-lg font-bold tabular-nums"
-                      style={{ color: (account?.total_pnl ?? 0) >= 0 ? "#4ade80" : "#f87171" }}>
-                      {account != null
-                        ? `${account.total_pnl >= 0 ? "+" : ""}$${account.total_pnl.toFixed(2)}`
+                      style={{ color: openPnl >= 0 ? "#4ade80" : "#f87171" }}>
+                      {positions.length > 0
+                        ? `${openPnl >= 0 ? "+" : ""}$${openPnl.toFixed(2)}`
                         : "—"}
                     </div>
                   </div>

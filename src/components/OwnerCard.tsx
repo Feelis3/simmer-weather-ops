@@ -13,11 +13,13 @@ interface Props {
 
 export default function OwnerCard({ owner, status, error, offline }: Props) {
   const portfolio = status?.portfolio;
-  const account = status?.account;
   const positions = status?.positions;
   const balance = portfolio?.balance_usdc ?? 0;
-  const posCount = positions?.positions?.filter((p) => p.venue === "polymarket").length ?? 0;
-  const winRate = account?.win_rate;
+  // Active positions: polymarket only, current_value > 0.01 (excludes resolved)
+  const posCount = positions?.positions?.filter(
+    (p) => p.venue === "polymarket" && p.current_value > 0.01
+  ).length ?? 0;
+  const exposure = portfolio?.total_exposure ?? 0;
   const isOnline = !offline && !error && status != null;
 
   return (
@@ -108,12 +110,8 @@ export default function OwnerCard({ owner, status, error, offline }: Props) {
                 color={owner.color}
               />
               <Stat
-                label="Win Rate"
-                value={
-                  status && winRate != null
-                    ? `${(winRate * 100).toFixed(0)}%`
-                    : "---"
-                }
+                label="Exposure"
+                value={status ? `$${exposure.toFixed(2)}` : "---"}
                 color={owner.color}
               />
             </div>
