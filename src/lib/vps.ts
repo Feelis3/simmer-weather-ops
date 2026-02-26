@@ -1,8 +1,10 @@
-// Server-only: single BASE_API_URL, differentiates bots by their individual API key.
+// Server-only:
+//   - simmerGet → calls https://api.simmer.markets with the bot's own API key (correct per-bot data)
+//   - vpsGet/vpsPost → calls VPS at BASE_URL for crons, logs, toggle, run (VPS-only operations)
 import type { OwnerId } from "./owners";
 
-const BASE_URL =
-  process.env.BASE_API_URL ?? "http://194.163.160.76:8420";
+const BASE_URL    = process.env.BASE_API_URL ?? "http://194.163.160.76:8420";
+const SIMMER_URL  = "https://api.simmer.markets";
 
 function getApiKey(id: OwnerId): string | null {
   switch (id) {
@@ -22,7 +24,22 @@ function getWallet(id: OwnerId): string | null {
   }
 }
 
-function buildHeaders(id: OwnerId): Record<string, string> {
+// ─── Simmer API (per-bot data: portfolio, positions, trades) ──────────────────
+
+export async function simmerGet<T>(id: OwnerId, path: string): Promise<T> {
+  const key = getApiKey(id);
+  if (!key) throw new OfflineError(id);
+  const res = await fetch(`${SIMMER_URL}${path}`, {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (!res.ok) throw new Error(`Simmer ${path}: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+// ─── VPS API (crons, logs, toggle, run — VPS-only operations) ────────────────
+
+function buildVpsHeaders(id: OwnerId): Record<string, string> {
   const key    = getApiKey(id)!;
   const wallet = getWallet(id);
   const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
@@ -35,9 +52,9 @@ export async function vpsGet<T>(id: OwnerId, path: string): Promise<T> {
   if (!key) throw new OfflineError(id);
   const res = await fetch(`${BASE_URL}${path}`, {
     cache: "no-store",
-    headers: buildHeaders(id),
+    headers: buildVpsHeaders(id),
   });
-  if (!res.ok) throw new Error(`API ${path}: ${res.status}`);
+  if (!res.ok) throw new Error(`VPS ${path}: ${res.status}`);
   return res.json() as Promise<T>;
 }
 
@@ -52,14 +69,16 @@ export async function vpsPost<T>(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...buildHeaders(id),
+      ...buildVpsHeaders(id),
     },
     body: JSON.stringify(body),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`API POST ${path}: ${res.status}`);
+  if (!res.ok) throw new Error(`VPS POST ${path}: ${res.status}`);
   return res.json() as Promise<T>;
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 class OfflineError extends Error {
   offline = true;
