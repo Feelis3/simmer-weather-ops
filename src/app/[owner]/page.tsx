@@ -3,10 +3,6 @@
 import { useEffect, useState, useCallback, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import { notFound } from "next/navigation";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, CartesianGrid,
-} from "recharts";
 import TradesTimeline from "@/components/TradesTimeline";
 import LeaderboardCard from "@/components/LeaderboardCard";
 import { BOTS } from "@/lib/constants";
@@ -15,26 +11,32 @@ import type {
   StatusResponse, TradesResponse, LeaderboardData, CronsResponse, Position, Trade,
 } from "@/lib/types";
 
-// ─── City map coordinates (equirectangular, 1000×500 viewport) ──────────────
-const CITY_COORDS: Record<string, { lat: number; lon: number }> = {
-  "NYC":     { lat: 40.7,  lon: -74.0  },
-  "Chicago": { lat: 41.9,  lon: -87.6  },
-  "Atlanta": { lat: 33.7,  lon: -84.4  },
-  "Dallas":  { lat: 32.8,  lon: -96.8  },
-  "Miami":   { lat: 25.8,  lon: -80.2  },
-  "London":  { lat: 51.5,  lon: -0.1   },
-  "Seoul":   { lat: 37.6,  lon: 127.0  },
-  "Toronto": { lat: 43.7,  lon: -79.4  },
-  "Paris":   { lat: 48.9,  lon: 2.3    },
-  "Tokyo":   { lat: 35.7,  lon: 139.7  },
-  "Sydney":  { lat: -33.9, lon: 151.2  },
-};
-
-function latLonToXY(lat: number, lon: number) {
-  return { x: (lon + 180) * (1000 / 360), y: (90 - lat) * (500 / 180) };
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
-// ─── State ───────────────────────────────────────────────────────────────────
+function cityPnl(city: string, positions: Position[]) {
+  return positions
+    .filter(p => p.question.toLowerCase().includes(city.toLowerCase()))
+    .reduce((s, p) => s + p.pnl, 0);
+}
+function cityBets(city: string, positions: Position[]) {
+  return positions.filter(p => p.question.toLowerCase().includes(city.toLowerCase())).length;
+}
+function cityAvgPrice(city: string, positions: Position[]) {
+  const ps = positions.filter(p => p.question.toLowerCase().includes(city.toLowerCase()));
+  if (!ps.length) return null;
+  return ps.reduce((s, p) => s + p.current_price, 0) / ps.length;
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
 interface DashboardState {
   status: StatusResponse | null;
   trades: TradesResponse | null;
@@ -129,10 +131,9 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
     setIsRefreshing(true); await fetchAll(); setIsRefreshing(false);
   };
 
-  // ── Derived data ────────────────────────────────────────────────────────────
-  const portfolio = state.status?.portfolio;
-  const account   = state.status?.account;
-  // Active positions: polymarket only, current_value > 0.01 (filters out resolved)
+  // ── Derived data ─────────────────────────────────────────────────────────────
+  const portfolio    = state.status?.portfolio;
+  const account      = state.status?.account;
   const positions: Position[] = (state.status?.positions?.positions ?? [])
     .filter(p => p.venue === "polymarket" && p.current_value > 0.01);
   const trades: Trade[] = (state.trades?.trades ?? [])
@@ -140,30 +141,9 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   const weatherActive = state.crons?.bots?.weather?.active ?? false;
   const c = ownerConfig.color;
 
-  // Balance: use portfolio.balance_usdc (the USDC wallet balance)
   const balance  = portfolio?.balance_usdc ?? 0;
   const exposure = portfolio?.total_exposure ?? 0;
   const openPnl  = positions.reduce((s, p) => s + p.pnl, 0);
-
-  const winLossData = [
-    { name: "Wins",   value: account?.win_count  ?? 0, color: "#4ade80" },
-    { name: "Losses", value: account?.loss_count ?? 0, color: "#f87171" },
-  ];
-
-  const tradesByDay = (() => {
-    const g: Record<string, { B: number; S: number }> = {};
-    trades.slice(-150).forEach(t => {
-      const d = t.created_at.slice(5, 10);
-      if (!g[d]) g[d] = { B: 0, S: 0 };
-      if (t.action.toLowerCase() === "buy") g[d].B += t.cost;
-      else g[d].S += t.cost;
-    });
-    return Object.entries(g).slice(-10).map(([date, v]) => ({
-      date,
-      Buys:  parseFloat(v.B.toFixed(1)),
-      Sells: parseFloat(v.S.toFixed(1)),
-    }));
-  })();
 
   return (
     <div className="min-h-screen bg-bg text-text-primary">
@@ -176,7 +156,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
             <span className="text-sm font-bold text-text-primary">{ownerConfig.name}</span>
             <span className="label-xs" style={{ color: c + "70" }}>{ownerConfig.type}</span>
 
-            {/* Status */}
             {state.offline ? (
               <span className="pill text-[0.45rem]" style={{ background: "#1b2d4a", color: "#92adc9" }}>PENDING</span>
             ) : state.error ? (
@@ -188,16 +167,14 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
               </div>
             ) : null}
 
-            {/* Quick stats */}
             <div className="hidden md:flex items-center gap-5 ml-2 pl-2 border-l border-border">
-              <StatChip label="Balance"   value={`$${balance.toFixed(2)}`}        color={c} />
-              <StatChip label="Exposure"  value={`$${exposure.toFixed(2)}`}        color="#f59e0b" />
-              <StatChip label="Positions" value={String(positions.length)}         color="#a78bfa" />
+              <StatChip label="Balance"   value={`$${balance.toFixed(2)}`}  color={c} />
+              <StatChip label="Exposure"  value={`$${exposure.toFixed(2)}`} color="#f59e0b" />
+              <StatChip label="Positions" value={String(positions.length)}  color="#a78bfa" />
               <LeaderboardCard data={state.leaderboard} />
             </div>
           </div>
 
-          {/* Controls */}
           <div className="flex items-center gap-2 shrink-0">
             <button onClick={handleRefresh} disabled={isRefreshing}
               className="flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-30">
@@ -255,38 +232,16 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
           <>
             {/* ── Row 1: Four key stats ────────────────────────────────────── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <BigStat
-                label="Balance"
-                value={`$${balance.toFixed(2)}`}
-                sub="USDC wallet"
-                color={c}
-                loading={!state.status}
-              />
-              <BigStat
-                label="Exposure"
-                value={`$${exposure.toFixed(2)}`}
-                sub="at risk in markets"
-                color="#f59e0b"
-                loading={!state.status}
-              />
-              <BigStat
-                label="Open Positions"
-                value={String(positions.length)}
-                sub={positions.length > 0
-                  ? `Open P&L: ${openPnl >= 0 ? "+" : ""}$${openPnl.toFixed(2)}`
-                  : "No open positions"}
-                color="#a78bfa"
-                loading={!state.status}
-              />
-              <BigStat
-                label="Total Trades"
-                value={account?.trades_count != null ? String(account.trades_count) : "—"}
-                sub={account
-                  ? `${account.win_count ?? 0} wins · ${account.loss_count ?? 0} losses`
-                  : undefined}
-                color={c}
-                loading={!state.status}
-              />
+              <BigStat label="Balance" value={`$${balance.toFixed(2)}`}
+                sub="USDC wallet" color={c} loading={!state.status} />
+              <BigStat label="Exposure" value={`$${exposure.toFixed(2)}`}
+                sub="at risk in markets" color="#f59e0b" loading={!state.status} />
+              <BigStat label="Open Positions" value={String(positions.length)}
+                sub={positions.length > 0 ? `Open P&L: ${openPnl >= 0 ? "+" : ""}$${openPnl.toFixed(2)}` : "No open positions"}
+                color="#a78bfa" loading={!state.status} />
+              <BigStat label="Total Trades" value={account?.trades_count != null ? String(account.trades_count) : "—"}
+                sub={account ? `${account.win_count ?? 0} wins · ${account.loss_count ?? 0} losses` : undefined}
+                color={c} loading={!state.status} />
             </div>
 
             {/* ── Row 2: Positions table ───────────────────────────────────── */}
@@ -323,20 +278,10 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                   <table className="w-full min-w-[700px]">
                     <thead>
                       <tr style={{ borderBottom: "1px solid #1b2d4a" }}>
-                        {[
-                          { label: "Market",       w: "w-auto"  },
-                          { label: "Side",         w: "w-14"    },
-                          { label: "Price",        w: "w-16"    },
-                          { label: "Shares",       w: "w-16"    },
-                          { label: "Cost Basis",   w: "w-20"    },
-                          { label: "Curr. Value",  w: "w-20"    },
-                          { label: "P&L",          w: "w-20"    },
-                          { label: "Expires",      w: "w-20"    },
-                        ].map(h => (
-                          <th key={h.label}
-                            className={`pb-2.5 text-left pr-3 ${h.w}`}
+                        {["Market","Side","Price","Shares","Cost Basis","Curr. Value","P&L","Expires"].map(h => (
+                          <th key={h} className="pb-2.5 text-left pr-3"
                             style={{ color: "#6b80a0", fontSize: "0.5rem", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>
-                            {h.label}
+                            {h}
                           </th>
                         ))}
                       </tr>
@@ -345,79 +290,53 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                       {positions
                         .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
                         .map((pos, i) => {
-                          const isYes  = (pos.shares_yes ?? 0) > 0;
-                          const shares = isYes ? pos.shares_yes : pos.shares_no;
-                          const pnlPos = pos.pnl >= 0;
-                          const expiresStr = pos.resolves_at
+                          const isYes   = (pos.shares_yes ?? 0) > 0;
+                          const shares  = isYes ? pos.shares_yes : pos.shares_no;
+                          const pnlPos  = pos.pnl >= 0;
+                          const expires = pos.resolves_at
                             ? new Date(pos.resolves_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
                             : "—";
-
                           return (
-                            <tr key={pos.market_id ?? i}
-                              className="transition-colors"
+                            <tr key={pos.market_id ?? i} className="transition-colors"
                               style={{ borderBottom: "1px solid #1b2d4a1a" }}
                               onMouseEnter={e => (e.currentTarget.style.background = "#0f1d35")}
                               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-
-                              {/* Market question */}
                               <td className="py-3 pr-4">
-                                <span className="text-xs font-medium leading-snug text-text-primary"
-                                  title={pos.question}
+                                <span className="text-xs font-medium leading-snug text-text-primary" title={pos.question}
                                   style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                                   {pos.question}
                                 </span>
                                 {pos.redeemable && (
                                   <span className="inline-block mt-1 text-[0.45rem] px-1.5 py-0.5 rounded font-bold"
-                                    style={{ background: "rgba(3,231,139,0.1)", color: "#03E78B" }}>
-                                    REDEEMABLE
-                                  </span>
+                                    style={{ background: "rgba(3,231,139,0.1)", color: "#03E78B" }}>REDEEMABLE</span>
                                 )}
                               </td>
-
-                              {/* Side */}
                               <td className="py-3 pr-3">
-                                <span className="px-2 py-0.5 rounded text-[0.5rem] font-bold tabular-nums"
+                                <span className="px-2 py-0.5 rounded text-[0.5rem] font-bold"
                                   style={isYes
                                     ? { background: "rgba(74,222,128,0.12)", color: "#4ade80" }
                                     : { background: "rgba(248,113,113,0.12)", color: "#f87171" }}>
                                   {isYes ? "YES" : "NO"}
                                 </span>
                               </td>
-
-                              {/* Current price */}
-                              <td className="py-3 pr-3 tabular-nums font-mono text-xs font-semibold"
-                                style={{ color: "#22d3ee" }}>
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs font-semibold" style={{ color: "#22d3ee" }}>
                                 {(pos.current_price * 100).toFixed(0)}¢
                               </td>
-
-                              {/* Shares */}
-                              <td className="py-3 pr-3 tabular-nums font-mono text-xs"
-                                style={{ color: "#92adc9" }}>
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs" style={{ color: "#92adc9" }}>
                                 {(shares ?? 0).toFixed(0)}
                               </td>
-
-                              {/* Cost basis */}
-                              <td className="py-3 pr-3 tabular-nums font-mono text-xs"
-                                style={{ color: "#6b80a0" }}>
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs" style={{ color: "#6b80a0" }}>
                                 ${pos.cost_basis.toFixed(2)}
                               </td>
-
-                              {/* Current value */}
-                              <td className="py-3 pr-3 tabular-nums font-mono text-xs font-semibold"
-                                style={{ color: "#dde8ff" }}>
+                              <td className="py-3 pr-3 tabular-nums font-mono text-xs font-semibold" style={{ color: "#dde8ff" }}>
                                 ${pos.current_value.toFixed(2)}
                               </td>
-
-                              {/* P&L */}
                               <td className="py-3 pr-3 tabular-nums font-mono text-xs font-bold"
                                 style={{ color: pnlPos ? "#4ade80" : "#f87171" }}>
                                 {pnlPos ? "+" : ""}${pos.pnl.toFixed(2)}
                               </td>
-
-                              {/* Expires */}
-                              <td className="py-3 text-[0.55rem] tabular-nums"
-                                style={{ color: "#6b80a0" }}>
-                                {expiresStr}
+                              <td className="py-3 text-[0.55rem] tabular-nums" style={{ color: "#6b80a0" }}>
+                                {expires}
                               </td>
                             </tr>
                           );
@@ -428,68 +347,10 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
               )}
             </div>
 
-            {/* ── Row 3: Trade Results | Trade Activity | Weather Bot ──────── */}
+            {/* ── Row 3: Positions Breakdown | Recent Trades | Weather Bot ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-              {/* Win/Loss donut */}
-              <div className="card p-5 flex flex-col">
-                <h3 className="text-xs font-semibold tracking-wide text-text-secondary mb-3">Trade Results</h3>
-                {(account?.win_count ?? 0) + (account?.loss_count ?? 0) > 0 ? (
-                  <>
-                    <ResponsiveContainer width="100%" height={148}>
-                      <PieChart>
-                        <Pie data={winLossData} cx="50%" cy="50%"
-                          innerRadius={42} outerRadius={64} paddingAngle={3} dataKey="value">
-                          {winLossData.map((e, i) => <Cell key={i} fill={e.color} opacity={0.85} />)}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{ background: "#0b1229", border: "1px solid #1b2d4a", borderRadius: 8, fontSize: 11 }}
-                          labelStyle={{ color: "#92adc9" }} itemStyle={{ color: "#f1f5f9" }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="flex justify-center gap-8 mt-2">
-                      {winLossData.map(d => (
-                        <div key={d.name} className="text-center">
-                          <div className="text-lg font-bold tabular-nums" style={{ color: d.color }}>{d.value}</div>
-                          <div className="label-xs mt-0.5">{d.name}</div>
-                        </div>
-                      ))}
-                      <div className="text-center">
-                        <div className="text-lg font-bold tabular-nums" style={{ color: "#22d3ee" }}>
-                          {account?.trades_count ?? "—"}
-                        </div>
-                        <div className="label-xs mt-0.5">Trades</div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center text-xs text-text-muted">No trade data yet</div>
-                )}
-              </div>
-
-              {/* Daily trade activity */}
-              <div className="card p-5 flex flex-col">
-                <h3 className="text-xs font-semibold tracking-wide text-text-secondary mb-3">
-                  Trade Activity · last 10 days
-                </h3>
-                {tradesByDay.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={175}>
-                    <BarChart data={tradesByDay} barSize={9} barCategoryGap="30%">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1b2d4a" vertical={false} />
-                      <XAxis dataKey="date" tick={{ fill: "#6b80a0", fontSize: 9 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: "#6b80a0", fontSize: 9 }} axisLine={false} tickLine={false}
-                        width={34} tickFormatter={(v: number) => `$${v}`} />
-                      <Tooltip
-                        contentStyle={{ background: "#0b1229", border: "1px solid #1b2d4a", borderRadius: 8, fontSize: 11 }}
-                        labelStyle={{ color: "#92adc9" }} itemStyle={{ color: "#f1f5f9" }} />
-                      <Bar dataKey="Buys"  fill="#f87171" opacity={0.8} radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="Sells" fill="#4ade80" opacity={0.8} radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center text-xs text-text-muted">No trade history</div>
-                )}
-              </div>
+              <PnlBreakdown positions={positions} openPnl={openPnl} color={c} loaded={!!state.status} />
+              <TradeFeed trades={trades} color={c} loaded={!!state.trades} />
 
               {/* Weather bot controls */}
               <div className="card p-5 flex flex-col gap-4">
@@ -514,7 +375,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                   </div>
                 </div>
 
-                {/* City chips */}
                 <div className="flex flex-wrap gap-1.5">
                   {ownerConfig.cities.map(city => (
                     <span key={city} className="text-[0.5rem] px-2 py-0.5 rounded font-mono font-semibold"
@@ -524,15 +384,12 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                   ))}
                 </div>
 
-                {/* Trades summary */}
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border">
                   <div>
                     <div className="label-xs mb-1">Open P&L</div>
                     <div className="text-lg font-bold tabular-nums"
                       style={{ color: openPnl >= 0 ? "#4ade80" : "#f87171" }}>
-                      {positions.length > 0
-                        ? `${openPnl >= 0 ? "+" : ""}$${openPnl.toFixed(2)}`
-                        : "—"}
+                      {positions.length > 0 ? `${openPnl >= 0 ? "+" : ""}$${openPnl.toFixed(2)}` : "—"}
                     </div>
                   </div>
                   <div>
@@ -543,7 +400,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
                   </div>
                 </div>
 
-                {/* Buttons */}
                 <div className="mt-auto grid grid-cols-2 gap-2">
                   <button onClick={() => handleToggle(!weatherActive)}
                     className="py-2 rounded-lg text-[0.6rem] font-bold transition-all"
@@ -561,8 +417,8 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
               </div>
             </div>
 
-            {/* ── Row 4: World map ─────────────────────────────────────────── */}
-            <CityMap cities={ownerConfig.cities} positions={positions} color={c} isOnline={!!state.status} />
+            {/* ── Row 4: City Monitor ──────────────────────────────────────── */}
+            <CityMonitor cities={ownerConfig.cities} positions={positions} color={c} isOnline={!!state.status} />
 
             {/* ── Row 5: Trades timeline ───────────────────────────────────── */}
             {trades.length > 0 && <TradesTimeline trades={trades} />}
@@ -585,110 +441,270 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   );
 }
 
-// ─── CityMap ──────────────────────────────────────────────────────────────────
-function CityMap({ cities, positions, color, isOnline }: {
-  cities: string[];
-  positions: Position[];
-  color: string;
-  isOnline: boolean;
+// ─── PnlBreakdown ─────────────────────────────────────────────────────────────
+function PnlBreakdown({ positions, openPnl, color, loaded }: {
+  positions: Position[]; openPnl: number; color: string; loaded: boolean;
 }) {
-  const cityPnl   = (city: string) =>
-    positions.filter(p => p.question.toLowerCase().includes(city.toLowerCase()))
-      .reduce((s, p) => s + p.pnl, 0);
-  const cityCount = (city: string) =>
-    positions.filter(p => p.question.toLowerCase().includes(city.toLowerCase())).length;
+  const yesBets    = positions.filter(p => (p.shares_yes ?? 0) > 0);
+  const noBets     = positions.filter(p => (p.shares_no  ?? 0) > 0);
+  const yesPnl     = yesBets.reduce((s, p) => s + p.pnl, 0);
+  const noPnl      = noBets.reduce((s, p) => s + p.pnl, 0);
+  const profitable = positions.filter(p => p.pnl > 0).length;
+  const under      = positions.filter(p => p.pnl < 0).length;
+  const totalCost  = positions.reduce((s, p) => s + p.cost_basis, 0);
+  const totalVal   = positions.reduce((s, p) => s + p.current_value, 0);
+  const pct        = totalCost > 0 ? ((totalVal - totalCost) / totalCost * 100) : 0;
 
   return (
-    <div className="card p-5 overflow-hidden">
+    <div className="card p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold tracking-wide text-text-secondary">Positions Breakdown</h3>
+        {loaded && positions.length > 0 && (
+          <span className="text-[0.5rem] font-bold tabular-nums px-2 py-0.5 rounded"
+            style={{ background: (pct >= 0 ? "#4ade80" : "#f87171") + "15",
+                     color:      (pct >= 0 ? "#4ade80" : "#f87171") }}>
+            {pct >= 0 ? "+" : ""}{pct.toFixed(1)}%
+          </span>
+        )}
+      </div>
+
+      {!loaded ? (
+        <div className="flex-1 flex flex-col gap-3">
+          <div className="skeleton h-10 w-32 rounded" />
+          <div className="skeleton h-3 w-full rounded" />
+          <div className="skeleton h-3 w-3/4 rounded" />
+        </div>
+      ) : positions.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-6">
+          <span className="text-2xl opacity-40">📭</span>
+          <span className="text-xs text-text-muted">No open positions</span>
+        </div>
+      ) : (
+        <>
+          {/* Open P&L hero */}
+          <div>
+            <div className="label-xs mb-1">Open P&L</div>
+            <div className="text-3xl font-bold tabular-nums"
+              style={{ color: openPnl >= 0 ? "#4ade80" : "#f87171" }}>
+              {openPnl >= 0 ? "+" : ""}${openPnl.toFixed(2)}
+            </div>
+            <div className="text-[0.5rem] mt-1 tabular-nums" style={{ color: "#6b80a0" }}>
+              ${totalVal.toFixed(2)} current · ${totalCost.toFixed(2)} cost basis
+            </div>
+          </div>
+
+          {/* Value bar */}
+          <div className="relative h-2 rounded-full overflow-hidden" style={{ background: "#1b2d4a" }}>
+            <div className="absolute inset-y-0 left-0 rounded-full transition-all"
+              style={{
+                width: `${Math.min(100, totalCost > 0 ? (totalVal / totalCost) * 100 : 0)}%`,
+                background: openPnl >= 0 ? "#4ade80" : "#f87171",
+              }} />
+          </div>
+
+          {/* YES / NO split */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg p-2.5" style={{ background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.12)" }}>
+              <div className="text-[0.45rem] font-bold tracking-widest mb-1" style={{ color: "#4ade80" }}>YES BETS</div>
+              <div className="text-sm font-bold tabular-nums" style={{ color: "#4ade80" }}>
+                {yesBets.length} <span className="text-[0.6rem] font-normal" style={{ color: "#4ade8080" }}>positions</span>
+              </div>
+              {yesBets.length > 0 && (
+                <div className="text-[0.55rem] tabular-nums mt-0.5"
+                  style={{ color: yesPnl >= 0 ? "#4ade80" : "#f87171" }}>
+                  {yesPnl >= 0 ? "+" : ""}${yesPnl.toFixed(2)}
+                </div>
+              )}
+            </div>
+            <div className="rounded-lg p-2.5" style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.12)" }}>
+              <div className="text-[0.45rem] font-bold tracking-widest mb-1" style={{ color: "#f87171" }}>NO BETS</div>
+              <div className="text-sm font-bold tabular-nums" style={{ color: "#f87171" }}>
+                {noBets.length} <span className="text-[0.6rem] font-normal" style={{ color: "#f8717180" }}>positions</span>
+              </div>
+              {noBets.length > 0 && (
+                <div className="text-[0.55rem] tabular-nums mt-0.5"
+                  style={{ color: noPnl >= 0 ? "#4ade80" : "#f87171" }}>
+                  {noPnl >= 0 ? "+" : ""}${noPnl.toFixed(2)}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Win/Loss counts */}
+          {(profitable + under) > 0 && (
+            <div className="flex items-center gap-2 text-[0.5rem]" style={{ color: "#6b80a0" }}>
+              <span className="font-semibold" style={{ color: "#4ade80" }}>▲ {profitable} winning</span>
+              <span>·</span>
+              <span className="font-semibold" style={{ color: "#f87171" }}>▼ {under} losing</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── TradeFeed ────────────────────────────────────────────────────────────────
+function TradeFeed({ trades, color, loaded }: {
+  trades: Trade[]; color: string; loaded: boolean;
+}) {
+  const recent = trades.slice(0, 8);
+
+  return (
+    <div className="card p-5 flex flex-col">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold tracking-wide text-text-secondary">Recent Trades</h3>
+        {loaded && trades.length > 0 && (
+          <span className="text-[0.5rem] tabular-nums" style={{ color: "#6b80a0" }}>
+            {trades.length} total
+          </span>
+        )}
+      </div>
+
+      {!loaded ? (
+        <div className="flex-1 flex flex-col gap-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="skeleton h-10 rounded" style={{ opacity: 1 - i * 0.15 }} />
+          ))}
+        </div>
+      ) : recent.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-6">
+          <span className="text-2xl opacity-40">📋</span>
+          <span className="text-xs text-text-muted">No trades yet</span>
+        </div>
+      ) : (
+        <div className="flex flex-col divide-y" style={{ borderColor: "#1b2d4a" }}>
+          {recent.map((t, i) => {
+            const isBuy = t.action.toLowerCase() === "buy";
+            return (
+              <div key={t.id ?? i} className="flex items-start gap-2.5 py-2.5 group">
+                {/* Action badge */}
+                <div className="shrink-0 mt-0.5 w-10 text-center py-0.5 rounded text-[0.45rem] font-black tracking-widest"
+                  style={isBuy
+                    ? { background: "rgba(74,222,128,0.12)", color: "#4ade80" }
+                    : { background: "rgba(248,113,113,0.12)", color: "#f87171" }}>
+                  {isBuy ? "BUY" : "SELL"}
+                </div>
+
+                {/* Market name */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[0.6rem] font-medium leading-snug text-text-primary"
+                    style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {t.market_question}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[0.45rem] tabular-nums" style={{ color: "#6b80a0" }}>
+                      {relTime(t.created_at)}
+                    </span>
+                    {t.side && (
+                      <span className="text-[0.45rem] font-semibold uppercase"
+                        style={{ color: t.side.toLowerCase() === "yes" ? "#4ade8080" : "#f8717180" }}>
+                        {t.side}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Cost */}
+                <div className="shrink-0 text-right">
+                  <div className="text-[0.6rem] font-bold tabular-nums"
+                    style={{ color: isBuy ? "#4ade80" : "#f87171" }}>
+                    ${(t.cost ?? 0).toFixed(2)}
+                  </div>
+                  <div className="text-[0.45rem] tabular-nums" style={{ color: "#6b80a0" }}>
+                    @{((t.price_before ?? 0) * 100).toFixed(0)}¢
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CityMonitor ──────────────────────────────────────────────────────────────
+function CityMonitor({ cities, positions, color, isOnline }: {
+  cities: string[]; positions: Position[]; color: string; isOnline: boolean;
+}) {
+  const cols = cities.length <= 5 ? cities.length : Math.ceil(cities.length / 2);
+
+  return (
+    <div className="card p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-semibold tracking-wide text-text-secondary">Coverage Zones</h3>
-        <div className="flex items-center gap-4 text-[0.55rem] text-text-secondary">
-          <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#4ade80" }} />Profit
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#f87171" }} />Loss
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: color }} />Active
+        <h3 className="text-xs font-semibold tracking-wide text-text-secondary">City Monitor</h3>
+        <div className="flex items-center gap-1.5">
+          {isOnline && <div className="w-1.5 h-1.5 rounded-full animate-pulse-neon" style={{ background: color }} />}
+          <span className="text-[0.5rem]" style={{ color: "#6b80a0" }}>
+            {cities.length} cities · {positions.length} active {positions.length === 1 ? "bet" : "bets"}
           </span>
         </div>
       </div>
 
-      <div className="rounded-xl overflow-hidden" style={{ background: "#05091a" }}>
-        <svg viewBox="0 0 1000 500" className="w-full" xmlns="http://www.w3.org/2000/svg">
-          {/* Grid */}
-          {[0,1,2,3,4].map(i => (
-            <line key={`h${i}`} x1="0" y1={i * 125} x2="1000" y2={i * 125} stroke="#1b2d4a" strokeWidth="0.6" />
-          ))}
-          {[0,1,2,3,4,5,6].map(i => (
-            <line key={`v${i}`} x1={i * 166.7} y1="0" x2={i * 166.7} y2="500" stroke="#1b2d4a" strokeWidth="0.6" />
-          ))}
-
-          {/* Continents */}
-          <polygon points="38,72 80,52 212,48 298,76 350,74 360,116 332,124 305,128 298,134 292,148 280,169 270,183 248,214 193,196 155,160 150,114 62,94" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.8" />
-          <polygon points="319,19 444,19 448,80 362,82" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.8" />
-          <polygon points="248,214 285,225 328,219 402,258 405,310 385,360 348,395 315,408 290,390 270,353 268,308 275,265" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.8" />
-          <polygon points="456,165 466,148 466,126 476,108 474,92 490,82 510,72 528,66 542,58 558,52 580,50 602,58 620,76 622,100 618,118 608,133 591,143 573,146 556,145 543,158 528,168 510,168 493,162" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.8" />
-          <polygon points="460,165 493,162 510,168 540,165 573,146 591,143 620,148 630,172 630,213 616,256 600,296 570,345 532,383 500,390 468,366 444,313 436,263 449,213 452,175" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.8" />
-          <polygon points="572,136 603,94 617,61 667,53 750,46 850,50 950,62 994,69 970,95 940,115 920,138 906,152 880,158 858,172 840,196 820,222 790,225 764,218 740,208 718,228 698,228 680,210 660,192 636,182 625,153 617,133 600,150" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.8" />
-          <polygon points="817,272 925,278 919,342 903,356 819,344" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.8" />
-          <polygon points="878,120 892,130 886,150 876,148 878,130" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.8" />
-          <polygon points="968,352 977,360 972,370 965,363" fill="#0b1229" stroke="#1b2d4a" strokeWidth="0.6" />
-
-          {/* City markers */}
-          {cities.map(city => {
-            const coords = CITY_COORDS[city];
-            if (!coords) return null;
-            const { x, y } = latLonToXY(coords.lat, coords.lon);
-            const pnl   = cityPnl(city);
-            const count = cityCount(city);
-            const dot   = !isOnline ? "#6b80a0"
-              : count > 0 ? (pnl >= 0 ? "#4ade80" : "#f87171")
-              : color;
-            const r = count > 0 ? Math.min(5 + count * 1.2, 9) : 4.5;
-            return (
-              <g key={city}>
-                {isOnline && <circle cx={x} cy={y} r={r + 7} fill={dot} opacity="0.1" />}
-                <circle cx={x} cy={y} r={r} fill={dot} opacity="0.92" />
-                <circle cx={x - r * 0.28} cy={y - r * 0.28} r={r * 0.32} fill="white" opacity="0.28" />
-                <text x={x} y={y + r + 11} textAnchor="middle"
-                  fill={dot} fontSize="9" fontWeight="600" fontFamily="Inter, sans-serif" opacity="0.9">
-                  {city}
-                </text>
-                {count > 0 && (
-                  <text x={x} y={y - r - 4} textAnchor="middle"
-                    fill={pnl >= 0 ? "#4ade80" : "#f87171"}
-                    fontSize="8" fontWeight="700" fontFamily="monospace" opacity="0.95">
-                    {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-
-      {/* City pills */}
-      <div className="flex flex-wrap gap-2 mt-3">
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {cities.map(city => {
-          const pnl   = cityPnl(city);
-          const count = cityCount(city);
-          const dot   = !isOnline ? "#6b80a0"
-            : count > 0 ? (pnl >= 0 ? "#4ade80" : "#f87171")
+          const bets  = cityBets(city, positions);
+          const pnl   = cityPnl(city, positions);
+          const price = cityAvgPrice(city, positions);
+          const hasPos = bets > 0;
+
+          // Determine status color
+          const dotColor = !isOnline ? "#6b80a0"
+            : hasPos ? (pnl >= 0 ? "#4ade80" : "#f87171")
             : color;
+
           return (
-            <div key={city} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[0.55rem]"
-              style={{ background: "#05091a", border: "1px solid #1b2d4a" }}>
-              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dot }} />
-              <span className="font-mono font-semibold" style={{ color: "#92adc9" }}>{city}</span>
-              {count > 0 && (
+            <div key={city} className="rounded-xl p-3 flex flex-col gap-2 transition-all"
+              style={{
+                background:  hasPos ? dotColor + "08" : "#05091a",
+                border:      `1px solid ${hasPos ? dotColor + "25" : "#1b2d4a"}`,
+              }}>
+              {/* City name + status */}
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-bold font-mono" style={{ color: hasPos ? dotColor : "#92adc9" }}>
+                  {city}
+                </span>
+                <div className="flex items-center gap-1">
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasPos && isOnline ? "animate-pulse-neon" : ""}`}
+                    style={{ background: dotColor }} />
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="h-px" style={{ background: hasPos ? dotColor + "20" : "#1b2d4a" }} />
+
+              {/* Stats */}
+              {hasPos ? (
                 <>
-                  <span className="font-bold tabular-nums" style={{ color: dot }}>
-                    {pnl >= 0 ? "+" : ""}{pnl.toFixed(1)}
-                  </span>
-                  <span className="text-text-muted">· {count}p</span>
+                  <div>
+                    <div className="text-[0.45rem] font-semibold tracking-widest mb-0.5" style={{ color: dotColor + "80" }}>
+                      P&L
+                    </div>
+                    <div className="text-sm font-bold tabular-nums leading-none" style={{ color: dotColor }}>
+                      {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[0.45rem]" style={{ color: "#6b80a0" }}>
+                      {bets} {bets === 1 ? "bet" : "bets"}
+                    </span>
+                    {price !== null && (
+                      <span className="text-[0.45rem] font-mono tabular-nums" style={{ color: "#22d3ee" }}>
+                        @{(price * 100).toFixed(0)}¢
+                      </span>
+                    )}
+                  </div>
                 </>
+              ) : (
+                <div className="flex flex-col gap-0.5">
+                  <div className="text-[0.45rem] font-semibold tracking-widest" style={{ color: "#6b80a060" }}>
+                    STATUS
+                  </div>
+                  <div className="text-[0.5rem]" style={{ color: isOnline ? color + "60" : "#6b80a0" }}>
+                    {isOnline ? "watching" : "offline"}
+                  </div>
+                </div>
               )}
             </div>
           );
@@ -698,7 +714,7 @@ function CityMap({ cities, positions, color, isOnline }: {
   );
 }
 
-// ─── BigStat ──────────────────────────────────────────────────────────────────
+// ─── Reusable sub-components ──────────────────────────────────────────────────
 function BigStat({ label, value, sub, color, loading }: {
   label: string; value: string; sub?: string; color: string; loading?: boolean;
 }) {
@@ -714,7 +730,6 @@ function BigStat({ label, value, sub, color, loading }: {
   );
 }
 
-// ─── StatChip ─────────────────────────────────────────────────────────────────
 function StatChip({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="flex items-center gap-1.5">
