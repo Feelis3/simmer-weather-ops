@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <rect width="120" height="120" rx="60" fill="#2a1800"/>
+  <!-- ears -->
+  <circle cx="26" cy="55" r="15" fill="#7a4a1a"/>
+  <circle cx="94" cy="55" r="15" fill="#7a4a1a"/>
+  <circle cx="26" cy="55" r="9" fill="#c4844a"/>
+  <circle cx="94" cy="55" r="9" fill="#c4844a"/>
+  <!-- head -->
+  <circle cx="60" cy="58" r="34" fill="#7a4a1a"/>
+  <!-- face -->
+  <ellipse cx="60" cy="72" rx="24" ry="20" fill="#c4844a"/>
+  <!-- eyes -->
+  <circle cx="49" cy="55" r="7" fill="white"/>
+  <circle cx="71" cy="55" r="7" fill="white"/>
+  <circle cx="50" cy="56" r="4" fill="#1a0800"/>
+  <circle cx="72" cy="56" r="4" fill="#1a0800"/>
+  <circle cx="51" cy="54.5" r="1.5" fill="white"/>
+  <circle cx="73" cy="54.5" r="1.5" fill="white"/>
+  <!-- nostrils -->
+  <ellipse cx="55" cy="70" rx="3.5" ry="2.5" fill="#5c2e00"/>
+  <ellipse cx="65" cy="70" rx="3.5" ry="2.5" fill="#5c2e00"/>
+  <!-- mouth smile -->
+  <path d="M50 77 Q60 85 70 77" fill="none" stroke="#5c2e00" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

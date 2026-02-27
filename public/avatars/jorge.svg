@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <rect width="120" height="120" rx="60" fill="#052010"/>
+  <!-- body morphsuit -->
+  <ellipse cx="60" cy="80" rx="24" ry="32" fill="#22c55e"/>
+  <!-- arms -->
+  <path d="M36 68 Q16 80 10 100" stroke="#22c55e" stroke-width="13" stroke-linecap="round" fill="none"/>
+  <path d="M84 68 Q104 80 110 100" stroke="#22c55e" stroke-width="13" stroke-linecap="round" fill="none"/>
+  <!-- hands -->
+  <circle cx="10" cy="100" r="9" fill="#a3e6b0"/>
+  <circle cx="110" cy="100" r="9" fill="#a3e6b0"/>
+  <!-- head (morphsuit, no skin) -->
+  <circle cx="60" cy="38" r="22" fill="#22c55e"/>
+  <!-- eyes on morphsuit -->
+  <ellipse cx="52" cy="36" rx="5" ry="6" fill="#16a34a"/>
+  <ellipse cx="68" cy="36" rx="5" ry="6" fill="#16a34a"/>
+  <circle cx="52" cy="36" r="3" fill="#052010"/>
+  <circle cx="68" cy="36" r="3" fill="#052010"/>
+  <!-- highlight -->
+  <circle cx="53.5" cy="34.5" r="1.2" fill="white"/>
+  <circle cx="69.5" cy="34.5" r="1.2" fill="white"/>
+</svg>
