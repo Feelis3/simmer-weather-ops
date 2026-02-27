@@ -854,10 +854,10 @@ function SpotifyWidget({
       {/* track info */}
       <div className="px-3 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center text-xl"
-            style={{ background: `linear-gradient(135deg, #1DB95430, #1DB95408)`, border: `1px solid #1DB95425` }}>
-            🎵
-          </div>
+          <img src="/avatars/piel-cover.jpg" alt="Piel"
+            className="w-10 h-10 rounded-xl shrink-0 object-cover"
+            style={{ border: "1px solid #1DB95425" }}
+          />
           <div className="min-w-0">
             <div className="text-[0.65rem] font-bold leading-tight truncate" style={{ color: "var(--ui-t1)" }}>
               {track.title}
