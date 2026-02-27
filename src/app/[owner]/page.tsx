@@ -21,9 +21,7 @@ function relTime(iso: string): string {
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
 }
-function fmtTime(secs: number) {
-  return `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, "0")}`;
-}
+
 function cityPnl(city: string, positions: Position[]) {
   return positions
     .filter(p => p.question.toLowerCase().includes(city.toLowerCase()))
@@ -78,8 +76,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
   // ── Spotify widget state ────────────────────────────────────────────────────
   const [spotifyVisible, setSpotifyVisible] = useState(false);
   const [spotifyMinimized, setSpotifyMinimized] = useState(false);
-  const [spotifyPlaying, setSpotifyPlaying] = useState(true);
-  const [spotifyProgress, setSpotifyProgress] = useState(22);
 
   // ── Data fetching ────────────────────────────────────────────────────────────
   const fetchFast = useCallback(async () => {
@@ -167,13 +163,6 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
     });
   }, [ownerConfig.easterEgg]);
 
-  // ── Spotify progress ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!spotifyPlaying || !spotifyVisible) return;
-    const t = setInterval(() => setSpotifyProgress(p => p >= 99 ? 4 : p + 0.22), 250);
-    return () => clearInterval(t);
-  }, [spotifyPlaying, spotifyVisible]);
-
   // ── Bot controls ─────────────────────────────────────────────────────────────
   const handleToggle = async (enabled: boolean) => {
     await fetch(`${prefix}/toggle/weather`, {
@@ -232,10 +221,7 @@ export default function OwnerDashboard({ params }: { params: Promise<{ owner: st
         <SpotifyWidget
           track={ownerConfig.spotify}
           color={c}
-          progress={spotifyProgress}
-          playing={spotifyPlaying}
           minimized={spotifyMinimized}
-          onTogglePlay={() => setSpotifyPlaying(p => !p)}
           onMinimize={() => setSpotifyMinimized(true)}
           onRestore={() => setSpotifyMinimized(false)}
           onClose={() => setSpotifyVisible(false)}
@@ -830,15 +816,12 @@ function SpotifyLogo({ size, color }: { size: number; color: string }) {
 }
 
 function SpotifyWidget({
-  track, color, progress, playing, minimized,
-  onTogglePlay, onMinimize, onRestore, onClose,
+  track, color, minimized, onMinimize, onRestore, onClose,
 }: {
-  track: { title: string; artist: string; durationSecs: number };
-  color: string; progress: number; playing: boolean; minimized: boolean;
-  onTogglePlay: () => void; onMinimize: () => void; onRestore: () => void; onClose: () => void;
+  track: { title: string; artist: string };
+  color: string; minimized: boolean;
+  onMinimize: () => void; onRestore: () => void; onClose: () => void;
 }) {
-  const elapsed = Math.floor(track.durationSecs * progress / 100);
-
   if (minimized) {
     return (
       <button onClick={onRestore}
@@ -851,52 +834,37 @@ function SpotifyWidget({
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-60 rounded-2xl shadow-2xl animate-spotify-in overflow-hidden"
+    <div className="fixed bottom-5 right-5 z-50 w-56 rounded-2xl shadow-2xl animate-spotify-in overflow-hidden"
       style={{ background: "var(--ui-card)", border: "1px solid var(--ui-border)" }}>
+      {/* accent bar */}
       <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, #1DB954, ${color})` }} />
-      <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
+      {/* header */}
+      <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
         <div className="flex items-center gap-1.5">
-          <SpotifyLogo size={12} color="#1DB954" />
-          <span className="text-[0.45rem] font-black tracking-widest" style={{ color: "#1DB954" }}>NOW PLAYING</span>
+          <SpotifyLogo size={11} color="#1DB954" />
+          <span className="text-[0.42rem] font-black tracking-widest" style={{ color: "#1DB954" }}>SONANDO AHORA</span>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={onMinimize} className="px-1 rounded hover:opacity-60 transition-opacity text-[0.7rem]"
+          <button onClick={onMinimize} className="px-1 rounded hover:opacity-60 transition-opacity text-[0.65rem]"
             style={{ color: "var(--ui-t2)" }}>_</button>
-          <button onClick={onClose} className="px-1 rounded hover:opacity-60 transition-opacity text-[0.7rem]"
+          <button onClick={onClose} className="px-1 rounded hover:opacity-60 transition-opacity text-[0.65rem]"
             style={{ color: "var(--ui-t2)" }}>✕</button>
         </div>
       </div>
-      <div className="px-3 pb-1">
+      {/* track info */}
+      <div className="px-3 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center text-base"
-            style={{ background: `linear-gradient(135deg, ${color}30, ${color}08)`, border: `1px solid ${color}20` }}>
+          <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center text-xl"
+            style={{ background: `linear-gradient(135deg, #1DB95430, #1DB95408)`, border: `1px solid #1DB95425` }}>
             🎵
           </div>
           <div className="min-w-0">
-            <div className="text-[0.62rem] font-bold leading-tight truncate" style={{ color: "var(--ui-t1)" }}>
+            <div className="text-[0.65rem] font-bold leading-tight truncate" style={{ color: "var(--ui-t1)" }}>
               {track.title}
             </div>
-            <div className="text-[0.5rem] truncate" style={{ color: "var(--ui-t2)" }}>{track.artist}</div>
+            <div className="text-[0.5rem] truncate mt-0.5" style={{ color: "#1DB954" }}>{track.artist}</div>
           </div>
         </div>
-      </div>
-      <div className="px-3 pb-1">
-        <div className="relative h-1 rounded-full overflow-hidden" style={{ background: "var(--ui-border)" }}>
-          <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${progress}%`, background: "#1DB954" }} />
-        </div>
-        <div className="flex justify-between mt-0.5">
-          <span className="text-[0.42rem] tabular-nums" style={{ color: "var(--ui-t2)" }}>{fmtTime(elapsed)}</span>
-          <span className="text-[0.42rem] tabular-nums" style={{ color: "var(--ui-t2)" }}>{fmtTime(track.durationSecs)}</span>
-        </div>
-      </div>
-      <div className="flex items-center justify-center gap-5 pb-3">
-        <button className="opacity-50 hover:opacity-100 transition-opacity text-lg" style={{ color: "var(--ui-t2)" }}>⏮</button>
-        <button onClick={onTogglePlay}
-          className="w-8 h-8 rounded-full flex items-center justify-center shadow transition-transform hover:scale-110"
-          style={{ background: "var(--ui-t1)", color: "var(--ui-bg)" }}>
-          <span className="text-sm leading-none">{playing ? "⏸" : "▶"}</span>
-        </button>
-        <button className="opacity-50 hover:opacity-100 transition-opacity text-lg" style={{ color: "var(--ui-t2)" }}>⏭</button>
       </div>
     </div>
   );

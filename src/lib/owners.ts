@@ -11,7 +11,7 @@ export interface OwnerConfig {
   emoji: string;
   /** Path under /public — try .jpg first, fallback to .svg */
   avatar?: string;
-  spotify?: { title: string; artist: string; durationSecs: number };
+  spotify?: { title: string; artist: string };
   easterEgg?: EasterEggId;
 }
 
@@ -24,7 +24,7 @@ export const OWNERS: Record<OwnerId, OwnerConfig> = {
     color: "#03E78B",
     accentDim: "rgba(3,231,139,0.12)",
     emoji: "🌡️",
-    spotify: { title: "Riders on the Storm", artist: "The Doors", durationSecs: 427 },
+    spotify: { title: "Piel suya", artist: "Yung Nick" },
   },
   jorge: {
     id: "jorge",
@@ -35,7 +35,7 @@ export const OWNERS: Record<OwnerId, OwnerConfig> = {
     accentDim: "rgba(96,165,250,0.12)",
     emoji: "⚡",
     avatar: "/avatars/jorge",
-    spotify: { title: "Going Crazy", artist: "Daddy Yankee", durationSecs: 198 },
+    spotify: { title: "Piel suya", artist: "Yung Nick" },
     easterEgg: "going-crazy",
   },
   mario: {
@@ -47,7 +47,7 @@ export const OWNERS: Record<OwnerId, OwnerConfig> = {
     accentDim: "rgba(255,121,198,0.12)",
     emoji: "🐒",
     avatar: "/avatars/mario",
-    spotify: { title: "Gorilla", artist: "Bruno Mars", durationSecs: 246 },
+    spotify: { title: "Piel suya", artist: "Yung Nick" },
     easterEgg: "monkey-brain",
   },
   jose: {
@@ -58,7 +58,7 @@ export const OWNERS: Record<OwnerId, OwnerConfig> = {
     color: "#ffb700",
     accentDim: "rgba(255,183,0,0.12)",
     emoji: "🌐",
-    spotify: { title: "Despacito", artist: "Luis Fonsi", durationSecs: 229 },
+    spotify: { title: "Piel suya", artist: "Yung Nick" },
   },
 };
 
